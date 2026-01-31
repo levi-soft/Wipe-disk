@@ -1,5 +1,5 @@
 @echo off
-REM HARDWARE KILL - PERMANENT HARDWARE DESTRUCTION
+REM SECURE WIPE - Zero-fill disk to prevent data recovery
 
 REM Check for admin rights
 net session >nul 2>&1
@@ -22,24 +22,21 @@ if %errorLevel% neq 0 (
 cls
 echo.
 echo ====================================================
-echo   WARNING - HARDWARE DESTRUCTION
+echo   SECURE WIPE - ZERO FILL DISK
 echo ====================================================
 echo.
 echo [RUNNING AS ADMINISTRATOR - OK]
 echo.
-echo This script will PERMANENTLY DAMAGE your hard drives!
+echo This script will ZERO-FILL all disks!
 echo.
-echo DATA-FIRST Strategy:
-echo   1. User data destruction (Documents, Downloads)
-echo   2. Program files destruction
-echo   3. Firmware zone corruption
-echo   4. Head thrashing (HDD) / SSD wear
-echo   5. Boot + Windows destruction (system crashes)
+echo What it does:
+echo   - Write ZERO to entire disk (all sectors)
+echo   - Prevent data recovery by software
+echo   - Safe for hardware (no damage)
 echo.
-echo RISKS:
-echo   - Drive will be UNUSABLE FOREVER
-echo   - Potential FIRE HAZARD
-echo   - May damage motherboard
+echo WARNING:
+echo   - ALL DATA WILL BE PERMANENTLY ERASED
+echo   - System will shut down after completion
 echo.
 echo ====================================================
 echo.
@@ -55,7 +52,7 @@ if /i NOT "%confirm%"=="Y" (
 
 echo.
 echo ====================================================
-echo   STARTING HARDWARE DESTRUCTION IN 5 SECONDS
+echo   STARTING SECURE WIPE IN 5 SECONDS
 echo   Press Ctrl+C to ABORT!
 echo ====================================================
 echo.
