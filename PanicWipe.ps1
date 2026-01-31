@@ -84,33 +84,42 @@ foreach ($disk in $disks) {
             }
         }
 
-        # Write zeros - start from offset 0
-        Write-Host "      Wiping..." -ForegroundColor Red -NoNewline
+        # Write zeros to ENTIRE disk
+        Write-Host "      Wiping $sizeGB GB with zeros..." -ForegroundColor Red
 
-        $buffer = New-Object byte[] (4MB)
+        $buffer = New-Object byte[] (4MB)  # 4MB of zeros
         $offset = 0L
-        $targetSize = $disk.Size
-        $lastPct = -1
+        $targetSize = [long]$disk.Size
+        $totalWritten = 0L
+        $errors = 0
+        $startTime = Get-Date
 
         while ($offset -lt $targetSize) {
             $written = 0
             $success = [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written)
 
-            if ($written -gt 0) {
+            if ($success -and $written -gt 0) {
+                $totalWritten += $written
                 $offset += $written
             } else {
-                $offset += 4MB  # Skip if error
+                $errors++
+                $offset += 4MB  # Skip bad sector
             }
 
+            # Progress every 1%
             $pct = [int](($offset / $targetSize) * 100)
-            if ($pct -ne $lastPct -and $pct % 5 -eq 0) {
-                Write-Host "`r      Wiping... $pct%" -ForegroundColor Red -NoNewline
-                $lastPct = $pct
+            $elapsed = ((Get-Date) - $startTime).TotalSeconds
+            if ($elapsed -gt 0) {
+                $speed = [math]::Round($totalWritten / $elapsed / 1MB, 1)
+                $remaining = if ($speed -gt 0) { [math]::Round(($targetSize - $offset) / 1MB / $speed / 60, 1) } else { 0 }
+                Write-Host ("`r      Progress: {0}% | {1} MB/s | ~{2} min left     " -f $pct, $speed, $remaining) -NoNewline -ForegroundColor Yellow
             }
         }
 
         $handle.Close()
-        Write-Host "`r      WIPED!                    " -ForegroundColor Green
+        $totalGB = [math]::Round($totalWritten / 1GB, 2)
+        Write-Host ""
+        Write-Host "      DONE! Wrote $totalGB GB of zeros. Errors: $errors" -ForegroundColor Green
     }
     catch {
         Write-Host "      Error: $($_.Exception.Message)" -ForegroundColor DarkGray
