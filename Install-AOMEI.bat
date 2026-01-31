@@ -1,14 +1,20 @@
 @echo off
 :: ============================================
 :: AOMEI Silent Installer
-:: Chay setup.exe trong cung thu muc
+:: Chay setup.exe trong thu muc Documents\AOMEI
 :: ============================================
 
 setlocal
 
-:: Get script directory
-set "SCRIPT_DIR=%~dp0"
-set "INSTALLER=%SCRIPT_DIR%setup.exe"
+:: Set project folder in Documents
+set "PROJECT_DIR=%USERPROFILE%\Documents\AOMEI"
+set "INSTALLER=%PROJECT_DIR%\setup.exe"
+
+:: Create project folder if not exists
+if not exist "%PROJECT_DIR%" (
+    mkdir "%PROJECT_DIR%"
+    echo Da tao thu muc: %PROJECT_DIR%
+)
 
 echo ============================================
 echo   AOMEI Silent Installer
@@ -28,7 +34,9 @@ if %errorlevel% neq 0 (
 :: Check if setup.exe exists
 if not exist "%INSTALLER%" (
     echo [LOI] Khong tim thay file: %INSTALLER%
-    echo Hay dat file setup.exe cung thu muc voi script nay.
+    echo.
+    echo Hay dat file setup.exe vao thu muc:
+    echo %PROJECT_DIR%
     echo.
     pause
     exit /b 1
