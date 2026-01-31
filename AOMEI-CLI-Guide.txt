@@ -43,35 +43,34 @@ PartAssist.exe /list        (List all disks and partitions)
    PartAssist.exe /list
 
 2. WIPE ENTIRE DISK (Zero Fill):
-   PartAssist.exe /hd:1 /wipedisk /method:1 /out:wipe.log
+   PartAssist.exe /wipe /hd:1 /fill:0
 
+   /wipe       - Wipe command
    /hd:1       - Target disk 1 (WARNING: Change number carefully!)
-   /wipedisk   - Wipe entire disk
-   /method:1   - Use zero fill (fastest, 1 pass)
-   /out:       - Save log
+   /fill:0     - Fill with zeros (fastest, 1 pass)
 
-3. WIPE SPECIFIC PARTITION:
-   PartAssist.exe /hd:0 /wipe:2 /method:1
-
-   /hd:0       - Disk 0
-   /wipe:2     - Wipe partition 2
-   /method:1   - Zero fill
+3. WIPE SPECIFIC DISK (Different methods):
+   PartAssist.exe /wipe /hd:0 /fill:0    (Zero fill)
+   PartAssist.exe /wipe /hd:0 /fill:1    (Random data)
+   PartAssist.exe /wipe /hd:0 /fill:2    (DoD 3 passes)
+   PartAssist.exe /wipe /hd:0 /fill:3    (DoD 7 passes)
+   PartAssist.exe /wipe /hd:0 /fill:4    (Gutmann 35 passes)
 
 4. SECURE WIPE (DoD 5220.22-M):
-   PartAssist.exe /hd:1 /wipedisk /method:3 /out:secure_wipe.log
+   PartAssist.exe /wipe /hd:1 /fill:2
 
-   /method:3   - DoD standard (3 passes, more secure)
+   /fill:2     - DoD standard (3 passes, more secure)
 
 5. DELETE ALL PARTITIONS THEN WIPE:
    PartAssist.exe /hd:1 /deleteall
-   PartAssist.exe /hd:1 /wipedisk /method:1
+   PartAssist.exe /wipe /hd:1 /fill:0
 
-=== WIPE METHODS ===
-/method:1   - Fill sectors with Zero (1 pass) - FASTEST
-/method:2   - Fill with Random data (1 pass)
-/method:3   - DoD 5220.22-M (3 passes)
-/method:4   - DoD 5220.28-STD (7 passes)
-/method:5   - Gutmann (35 passes) - SLOWEST, MOST SECURE
+=== WIPE METHODS (FILL PARAMETER) ===
+/fill:0     - Fill sectors with Zero (1 pass) - FASTEST
+/fill:1     - Fill with Random data (1 pass)
+/fill:2     - DoD 5220.22-M (3 passes)
+/fill:3     - DoD 5220.28-STD (7 passes)
+/fill:4     - Gutmann (35 passes) - SLOWEST, MOST SECURE
 
 === SAFETY TIPS ===
 ⚠️  ALWAYS verify disk number before wiping!
