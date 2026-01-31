@@ -1,105 +1,101 @@
 # Disk Wiper
 
-Professional emergency disk wipe tool for Windows.
+Professional emergency disk wipe tool for Windows - **like AOMEI/MiniTool**.
 
-## Two Methods
-
-### Method 1: Raw Disk Access (Instant)
+## How It Works (AOMEI Style)
 
 ```
-Opens \\.\PhysicalDriveX → Direct sector write → Immediate destruction
+┌─────────────────────────────────────────────────────────────────┐
+│  1. Mount WinRE.wim (Windows Recovery Image)                   │
+│  2. Inject wipe script into startnet.cmd                       │
+│  3. Save and unmount WIM                                        │
+│  4. reagentc /boottore → Reboot to WinRE                       │
+│  5. WinRE boots → startnet.cmd runs automatically              │
+│  6. diskpart clean all on ALL disks                            │
+│  7. wpeutil shutdown                                            │
+└─────────────────────────────────────────────────────────────────┘
 ```
-- No reboot required
-- Windows crashes if system disk is wiped (but data already destroyed)
 
-### Method 2: Boot Wipe (Like AOMEI)
-
-```
-Setup → Reboot → Boot into PreOS → Wipe all disks → Shutdown
-```
-- Proper PreOS environment
-- Can cleanly wipe system disk
-- Uses diskpart clean all
+**This is how AOMEI and MiniTool actually work** - they inject code into WinRE.
 
 ## Files
 
 ```
 Wipe-disk/
-├── PanicWipe.bat           # INSTANT - Raw wipe all disks now
-├── Wipe.bat                # Interactive raw disk wipe
-├── Wipe.ps1                # PowerShell interface
-├── DiskWiper.psm1          # Core raw disk module
-│
-└── BootWipe/               # PreOS Boot Wipe (like AOMEI)
-    ├── PanicBoot.bat       # One-click reboot + wipe all
-    ├── BootWipe.bat        # Interactive setup
-    └── CreateBootWipe.ps1  # PowerShell setup
+├── PanicWipe.bat       # ONE CLICK - Inject + Reboot + Wipe All
+├── PanicWipe.ps1       # Main script (WinRE injection)
+├── NukeWipe.ps1        # Interactive with options
+├── Wipe.ps1            # Raw disk access wipe
+├── Wipe.bat            # Launcher
+└── DiskWiper.psm1      # Core module
 ```
 
 ## Usage
 
 ### PANIC MODE (No Confirmation)
 
-| Action | Method |
-|--------|--------|
-| `PanicWipe.bat` | Raw wipe ALL disks instantly (Windows crashes) |
-| `BootWipe/PanicBoot.bat` | Reboot → Wipe all → Shutdown |
+**Double-click `PanicWipe.bat`**
 
-### Interactive Raw Wipe
+What happens:
+1. Mounts WinRE.wim
+2. Injects wipe script into startnet.cmd
+3. Reboots to Windows RE
+4. Automatically wipes ALL disks with `diskpart clean all`
+5. Shuts down
 
-```powershell
-.\Wipe.ps1 -List                        # List disks
-.\Wipe.ps1 -Disk 1 -Method Zero         # Wipe disk 1
-.\Wipe.ps1 -Disk 1 -Method DoD -Force   # No confirmation
-```
-
-### Boot Wipe (PreOS)
+### Interactive
 
 ```powershell
-# Setup boot wipe
-.\BootWipe\CreateBootWipe.ps1 -Setup
+# Reboot to WinRE and wipe (with confirmation)
+.\NukeWipe.ps1 -BootWipe
 
-# Cancel before reboot
-.\BootWipe\CreateBootWipe.ps1 -Cancel
+# Raw wipe all disks instantly
+.\NukeWipe.ps1 -RawWipe -All
 
-# Create USB tool
-.\BootWipe\CreateBootWipe.ps1 -CreateUSB -USBDrive E
+# Raw wipe specific disk
+.\NukeWipe.ps1 -RawWipe -Disk 1
+
+# List disks
+.\NukeWipe.ps1 -ListDisks
 ```
 
-## Wipe Methods
+## Methods
 
-| Method | Passes | Description | Security |
-|--------|--------|-------------|----------|
-| `Zero` | 1 | Write zeros | Standard |
-| `Random` | N | Random data | High |
-| `DoD` | 3 | DoD 5220.22-M (0x00, 0xFF, random) | Military |
-| `Gutmann` | 35 | Gutmann algorithm | Maximum |
+| Method | Description |
+|--------|-------------|
+| **WinRE Inject** | Modify WinRE → Reboot → Auto wipe (proper PreOS) |
+| **Raw Disk** | Direct sector write via `\\.\PhysicalDriveX` |
 
 ## Technical Details
 
-- Uses Windows API `CreateFile` with `\\.\PhysicalDriveX`
-- Flags: `FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH`
-- Writes directly to disk sectors, bypassing filesystem cache
-- Can wipe system disk while Windows is running (will cause BSOD)
-- Buffer size: 1-4 MB for optimal performance
+### WinRE Injection
+- Locates `Winre.wim` via ReAgent.xml or Recovery partition
+- Uses `Mount-WindowsImage` to mount WIM
+- Modifies `startnet.cmd` (auto-runs on WinRE boot)
+- Uses `reagentc /boottore` to boot into WinRE
+
+### Raw Disk Access
+- Opens `\\.\PhysicalDriveX` with `GENERIC_WRITE`
+- Dismounts volumes with `FSCTL_DISMOUNT_VOLUME`
+- Direct sector write with `FILE_FLAG_NO_BUFFERING`
 
 ## Requirements
 
 - Windows 10/11
 - Administrator privileges
-- PowerShell 5.1+
+- Windows RE enabled (default on most systems)
 
 ## Warning
 
 ```
 ╔═══════════════════════════════════════════════════════════════════╗
 ║                                                                   ║
-║   DATA IS PERMANENTLY DESTROYED AND CANNOT BE RECOVERED           ║
+║   ALL DATA WILL BE PERMANENTLY DESTROYED                          ║
 ║                                                                   ║
-║   • Wiping system disk will crash Windows immediately             ║
-║   • No confirmation in PanicWipe mode                             ║
-║   • Affects ALL connected physical disks in Panic mode            ║
-║   • USE ONLY IN GENUINE EMERGENCIES                               ║
+║   • PanicWipe has NO CONFIRMATION                                 ║
+║   • Wipes ALL connected disks including system                    ║
+║   • Data is UNRECOVERABLE                                         ║
+║   • Machine will not boot after wipe                              ║
 ║                                                                   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 ```

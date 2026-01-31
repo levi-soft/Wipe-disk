@@ -1,6 +1,6 @@
 @echo off
-:: PANIC WIPE - One click destroy all disks
-:: NO CONFIRMATION - USE WITH EXTREME CAUTION
+:: PANIC WIPE - One click, inject into WinRE, reboot, wipe all
+:: NO CONFIRMATION
 
 net session >nul 2>&1
 if %errorlevel% neq 0 (
