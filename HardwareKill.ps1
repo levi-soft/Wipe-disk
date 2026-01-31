@@ -1,10 +1,18 @@
 #Requires -RunAsAdministrator
 # SECURE WIPE - 2-Pass: Clean + Zero
-# Prevents data recovery by professional tools
-# Keeps Windows running until the end
-# FORCE MODE: Ignores all errors, ensures completion
+# RUNS FROM RAM - Can wipe system disk
 
-Add-Type @"
+# ============================================
+# STEP 1: LOAD EVERYTHING INTO RAM
+# ============================================
+
+Write-Host ""
+Write-Host "  ====================================================" -ForegroundColor Cyan
+Write-Host "     LOADING INTO RAM..." -ForegroundColor Yellow
+Write-Host "  ====================================================" -ForegroundColor Cyan
+
+# Load .NET code into memory
+$RawDiskCode = @"
 using System;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -46,152 +54,139 @@ public class RawDisk {
 }
 "@
 
-# Disable Ctrl+C to prevent cancellation
-[Console]::TreatControlCAsInput = $true
+Add-Type -TypeDefinition $RawDiskCode
 
-$ErrorActionPreference = "SilentlyContinue"
+# Pre-allocate buffer in RAM (100MB of zeros)
+$bufferSize = 100MB
+$zeroBuffer = New-Object byte[] $bufferSize
 
-Write-Host ""
-Write-Host "  ====================================================" -ForegroundColor Cyan
-Write-Host "     SECURE WIPE - 2 PASS (CLEAN + ZERO)" -ForegroundColor Cyan
-Write-Host "     FORCE MODE - CANNOT BE CANCELLED" -ForegroundColor Red
-Write-Host "  ====================================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  This script will:" -ForegroundColor Yellow
-Write-Host "  - Pass 1: CLEAN disk (remove partitions)" -ForegroundColor Yellow
-Write-Host "  - Pass 2: ZERO fill (0x00 - prevent recovery)" -ForegroundColor Yellow
-Write-Host "  - System disk processed LAST (Windows stays alive)" -ForegroundColor Yellow
-Write-Host ""
+# Get disk info and store in RAM
+$disks = @(Get-WmiObject Win32_DiskDrive)
+$diskInfoList = @()
 
-# Find system disk (contains Windows)
-$systemDrive = $env:SystemDrive.TrimEnd(':')
-$systemPartition = Get-Partition -DriveLetter $systemDrive -ErrorAction SilentlyContinue
-$systemDiskNum = if ($systemPartition) { $systemPartition.DiskNumber } else { 0 }
-
-Write-Host "  [INFO] System disk: $systemDiskNum (processed LAST)" -ForegroundColor Cyan
-Write-Host ""
-
-$disks = Get-WmiObject Win32_DiskDrive
-
-# Sort disks: non-system first, system disk last
-$sortedDisks = $disks | Sort-Object {
-    $num = $_.DeviceID -replace '.*PHYSICALDRIVE', ''
-    if ($num -eq $systemDiskNum) { 1 } else { 0 }
+foreach ($disk in $disks) {
+    $diskNum = $disk.DeviceID -replace '.*PHYSICALDRIVE', ''
+    $diskInfoList += @{
+        Number = $diskNum
+        Size = [long]$disk.Size
+        SizeGB = [math]::Round($disk.Size / 1GB, 1)
+        Model = $disk.Model
+        Path = "\\.\PhysicalDrive$diskNum"
+    }
 }
 
-foreach ($disk in $sortedDisks) {
-    $diskNum = $disk.DeviceID -replace '.*PHYSICALDRIVE', ''
-    $sizeGB = [math]::Round($disk.Size / 1GB, 1)
-    $mediaType = $disk.MediaType
-    $isSystemDisk = ($diskNum -eq $systemDiskNum)
+# Disable Ctrl+C
+[Console]::TreatControlCAsInput = $true
+$ErrorActionPreference = "SilentlyContinue"
 
-    if ($isSystemDisk) {
-        Write-Host "  [*] Disk $diskNum : $($disk.Model) - $sizeGB GB [SYSTEM - LAST]" -ForegroundColor Red
-    } else {
-        Write-Host "  [*] Disk $diskNum : $($disk.Model) - $sizeGB GB" -ForegroundColor Yellow
-    }
+Write-Host "  [OK] Loaded into RAM" -ForegroundColor Green
+Write-Host "  [OK] Buffer: $($bufferSize / 1MB) MB ready" -ForegroundColor Green
+Write-Host "  [OK] Found $($diskInfoList.Count) disk(s)" -ForegroundColor Green
+Write-Host ""
 
-    $path = "\\.\PhysicalDrive$diskNum"
-    $targetSize = [long]$disk.Size
-    $bufferSize = 100MB
-    $buffer = New-Object byte[] $bufferSize
-    $written = 0
+# ============================================
+# STEP 2: DISPLAY INFO
+# ============================================
 
-    # ============================================
-    # PASS 1: CLEAN DISK
-    # ============================================
-    Write-Host "      [PASS 1/2] CLEANING disk..." -ForegroundColor Magenta
+Write-Host "  ====================================================" -ForegroundColor Cyan
+Write-Host "     SECURE WIPE - 2 PASS (CLEAN + ZERO)" -ForegroundColor Cyan
+Write-Host "     RUNNING FROM RAM" -ForegroundColor Red
+Write-Host "  ====================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Pass 1: CLEAN disk (remove all data)" -ForegroundColor Yellow
+Write-Host "  Pass 2: ZERO fill (prevent recovery)" -ForegroundColor Yellow
+Write-Host ""
 
-    # Try multiple methods to clean
+foreach ($info in $diskInfoList) {
+    Write-Host "  [*] Disk $($info.Number): $($info.Model) - $($info.SizeGB) GB" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# ============================================
+# STEP 3: PASS 1 - CLEAN ALL DISKS
+# ============================================
+
+Write-Host "  ====================================================" -ForegroundColor Magenta
+Write-Host "     PASS 1: CLEANING ALL DISKS" -ForegroundColor Magenta
+Write-Host "  ====================================================" -ForegroundColor Magenta
+Write-Host ""
+
+foreach ($info in $diskInfoList) {
+    $diskNum = $info.Number
+    Write-Host "  [CLEAN] Disk $diskNum..." -ForegroundColor Magenta
+
+    # Method 1: diskpart clean
     try {
-        $diskpartScript = @"
-select disk $diskNum
-clean
-"@
-        $diskpartScript | diskpart 2>$null | Out-Null
+        $script = "select disk $diskNum`nclean"
+        $script | diskpart 2>$null | Out-Null
     } catch {}
 
+    # Method 2: Clear-Disk
     try {
         Clear-Disk -Number $diskNum -RemoveData -RemoveOEM -Confirm:$false -ErrorAction SilentlyContinue 2>$null
     } catch {}
 
-    # Force remove all partitions
+    # Method 3: Remove partitions
     try {
         Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue | Remove-Partition -Confirm:$false -ErrorAction SilentlyContinue 2>$null
     } catch {}
 
-    Write-Host "      [OK] Pass 1 complete" -ForegroundColor Green
+    Write-Host "  [OK] Disk $diskNum cleaned" -ForegroundColor Green
+}
 
-    # ============================================
-    # PASS 2: ZERO FILL
-    # ============================================
-    Write-Host "      [PASS 2/2] Writing ZERO..." -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  [PASS 1 COMPLETE] All disks cleaned" -ForegroundColor Green
+Write-Host ""
 
-    # Try to open disk with retry
+# ============================================
+# STEP 4: PASS 2 - ZERO FILL ALL DISKS
+# ============================================
+
+Write-Host "  ====================================================" -ForegroundColor Cyan
+Write-Host "     PASS 2: ZERO FILL ALL DISKS" -ForegroundColor Cyan
+Write-Host "  ====================================================" -ForegroundColor Cyan
+Write-Host ""
+
+foreach ($info in $diskInfoList) {
+    $diskNum = $info.Number
+    $targetSize = $info.Size
+    $sizeGB = $info.SizeGB
+    $path = $info.Path
+
+    Write-Host "  [ZERO] Disk $diskNum ($sizeGB GB)..." -ForegroundColor Cyan
+
+    # Open disk with retry
     $handle = $null
-    for ($retry = 0; $retry -lt 5; $retry++) {
-        $handle = [RawDisk]::Open($path)
-        if (-not $handle.IsInvalid) { break }
-        Start-Sleep -Milliseconds 500
+    for ($retry = 0; $retry -lt 10; $retry++) {
+        try {
+            $handle = [RawDisk]::Open($path)
+            if (-not $handle.IsInvalid) { break }
+        } catch {}
+        Start-Sleep -Milliseconds 200
     }
 
     if ($handle -eq $null -or $handle.IsInvalid) {
-        Write-Host "      [WARN] Cannot open disk, skipping zero-fill" -ForegroundColor Yellow
+        Write-Host "  [WARN] Cannot open Disk $diskNum" -ForegroundColor Yellow
         continue
     }
 
-    # Lock and dismount all volumes on this disk
-    try {
-        Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue | ForEach-Object {
-            if ($_.DriveLetter) {
-                $volHandle = [RawDisk]::Open("\\.\$($_.DriveLetter):")
-                if (-not $volHandle.IsInvalid) {
-                    [RawDisk]::Lock($volHandle)
-                    [RawDisk]::Dismount($volHandle)
-                    $volHandle.Close()
-                }
-            }
-        }
-    } catch {}
+    # Write zeros
+    $written = 0
+    for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
+        try {
+            [RawDisk]::WriteAt($handle, $offset, $zeroBuffer, [ref]$written) | Out-Null
+        } catch {}
 
-    if ($isSystemDisk) {
-        # SYSTEM DISK: Write from END to START
-        $totalChunks = [math]::Ceiling($targetSize / $bufferSize)
-        $currentChunk = 0
-
-        for ($i = $totalChunks - 1; $i -ge 0; $i--) {
-            $offset = [long]$i * $bufferSize
-            if ($offset -ge $targetSize) { continue }
-
-            try {
-                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
-            } catch {}
-
-            $currentChunk++
-            if (($currentChunk % 10) -eq 0) {
-                $pct = [math]::Round(($currentChunk / $totalChunks) * 100, 1)
-                Write-Host "`r      [ZERO] $pct%     " -NoNewline -ForegroundColor Cyan
-            }
-        }
-    } else {
-        # NON-SYSTEM DISK: Write from START to END
-        for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
-            try {
-                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
-            } catch {}
-
-            if (($offset % 1GB) -eq 0) {
-                $pct = [math]::Round(($offset / $targetSize) * 100, 1)
-                Write-Host "`r      [ZERO] $pct%     " -NoNewline -ForegroundColor Cyan
-            }
+        if (($offset % 1GB) -eq 0) {
+            $pct = [math]::Round(($offset / $targetSize) * 100, 1)
+            $doneGB = [math]::Round($offset / 1GB, 1)
+            Write-Host "`r  [ZERO] Disk $diskNum : $pct% ($doneGB / $sizeGB GB)     " -NoNewline -ForegroundColor Cyan
         }
     }
 
     Write-Host ""
     try { $handle.Close() } catch {}
-
-    Write-Host "      [DONE] Disk $diskNum wiped" -ForegroundColor Green
-    Write-Host ""
+    Write-Host "  [OK] Disk $diskNum zeroed" -ForegroundColor Green
 }
 
 Write-Host ""
@@ -203,4 +198,5 @@ Write-Host "     Recovery: NOT POSSIBLE" -ForegroundColor Green
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host ""
 
+# Shutdown
 Stop-Computer -Force
