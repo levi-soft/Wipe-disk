@@ -44,12 +44,12 @@ echo.
 echo ====================================================
 echo.
 
-set /p confirm="Type DESTROY to continue: "
+set /p confirm="Continue? (Y/N): "
 
-if /i NOT "%confirm%"=="DESTROY" (
+if /i NOT "%confirm%"=="Y" (
     echo.
     echo Cancelled.
-    timeout /t 3
+    timeout /t 2
     exit /b 0
 )
 
