@@ -192,7 +192,7 @@ foreach ($disk in $disks) {
         $handle.Close()
 
         Write-Host ""
-        Write-Host "      ✓ DESTROYED in < 1 minute" -ForegroundColor Green
+        Write-Host "      [OK] DESTROYED in less than 1 minute" -ForegroundColor Green
         Write-Host "      Hardware PERMANENTLY DAMAGED" -ForegroundColor Green
     }
     catch {
