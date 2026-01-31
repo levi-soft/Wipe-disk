@@ -41,11 +41,6 @@ public class RawDisk {
         Seek(h, offset);
         return WriteFile(h, data, (uint)data.Length, out written, IntPtr.Zero);
     }
-
-    public static bool SendATACommand(SafeFileHandle h, byte[] cmd) {
-        uint r;
-        return DeviceIoControl(h, 0x0007C040, cmd, (uint)cmd.Length, IntPtr.Zero, 0, out r, IntPtr.Zero);
-    }
 }
 "@
 
