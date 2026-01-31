@@ -22,7 +22,7 @@ if %errorLevel% neq 0 (
 cls
 echo.
 echo ====================================================
-echo   SECURE WIPE - 2 PASS (RANDOM + ZERO)
+echo   SECURE WIPE - 2 PASS (WIPE + ZERO)
 echo ====================================================
 echo.
 echo [RUNNING AS ADMINISTRATOR - OK]
@@ -30,8 +30,8 @@ echo.
 echo This script will ZERO-FILL all disks!
 echo.
 echo What it does:
-echo   - Pass 1: Write RANDOM data (destroy original data)
-echo   - Pass 2: Write ZERO (clean, prevent recovery)
+echo   - Pass 1: WIPE disk (0xFF - erase all data)
+echo   - Pass 2: ZERO fill (0x00 - prevent recovery)
 echo   - Safe for hardware (no damage)
 echo   - Professional recovery tools CANNOT recover
 echo.

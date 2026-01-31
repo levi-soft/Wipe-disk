@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-# SECURE WIPE - 2-Pass: Random + Zero fill
+# SECURE WIPE - 2-Pass: Wipe (0xFF) + Zero (0x00)
 # Prevents data recovery by professional tools
 
 Add-Type @"
@@ -46,12 +46,12 @@ public class RawDisk {
 
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Cyan
-Write-Host "     SECURE WIPE - 2 PASS (RANDOM + ZERO)" -ForegroundColor Cyan
+Write-Host "     SECURE WIPE - 2 PASS (WIPE + ZERO)" -ForegroundColor Cyan
 Write-Host "  ====================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  This script will:" -ForegroundColor Yellow
-Write-Host "  - Pass 1: Write RANDOM data (destroy original data)" -ForegroundColor Yellow
-Write-Host "  - Pass 2: Write ZERO (clean, prevent recovery)" -ForegroundColor Yellow
+Write-Host "  - Pass 1: WIPE disk (0xFF - erase all data)" -ForegroundColor Yellow
+Write-Host "  - Pass 2: ZERO fill (0x00 - prevent recovery)" -ForegroundColor Yellow
 Write-Host "  - Safe for hardware (no damage)" -ForegroundColor Yellow
 Write-Host ""
 
@@ -89,23 +89,26 @@ foreach ($disk in $disks) {
         $bufferSize = 100MB
         $buffer = New-Object byte[] $bufferSize
         $written = 0
-        $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
 
         # ============================================
-        # PASS 1: RANDOM DATA (destroy original data)
+        # PASS 1: WIPE (0xFF - erase all data)
         # ============================================
-        Write-Host "      [PASS 1/2] Writing RANDOM data..." -ForegroundColor Magenta
+        Write-Host "      [PASS 1/2] WIPING disk (0xFF)..." -ForegroundColor Magenta
+
+        # Fill buffer with 0xFF
+        for ($i = 0; $i -lt $bufferSize; $i++) {
+            $buffer[$i] = 0xFF
+        }
 
         for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
             try {
-                $rng.GetBytes($buffer)
                 [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
 
                 # Update progress every 1GB
                 if (($offset % 1GB) -eq 0) {
                     $pct = [math]::Round(($offset / $targetSize) * 100, 1)
                     $wipedGB = [math]::Round($offset / 1GB, 1)
-                    Write-Host "`r      [RANDOM] $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Magenta
+                    Write-Host "`r      [WIPE] $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Magenta
                 }
             }
             catch {
@@ -113,12 +116,12 @@ foreach ($disk in $disks) {
             }
         }
         Write-Host ""
-        Write-Host "      [OK] Pass 1 complete - original data destroyed" -ForegroundColor Green
+        Write-Host "      [OK] Pass 1 complete - disk wiped (0xFF)" -ForegroundColor Green
 
         # ============================================
-        # PASS 2: ZERO FILL (clean, prevent recovery)
+        # PASS 2: ZERO FILL (0x00 - prevent recovery)
         # ============================================
-        Write-Host "      [PASS 2/2] Writing ZERO..." -ForegroundColor Cyan
+        Write-Host "      [PASS 2/2] Writing ZERO (0x00)..." -ForegroundColor Cyan
 
         # Reset buffer to zeros
         $buffer = New-Object byte[] $bufferSize
@@ -139,9 +142,8 @@ foreach ($disk in $disks) {
             }
         }
         Write-Host ""
-        Write-Host "      [OK] Pass 2 complete - disk zeroed" -ForegroundColor Green
+        Write-Host "      [OK] Pass 2 complete - disk zeroed (0x00)" -ForegroundColor Green
 
-        $rng.Dispose()
         $handle.Close()
 
         Write-Host ""
@@ -155,8 +157,8 @@ foreach ($disk in $disks) {
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host "     SECURE WIPE COMPLETE (2 PASS)" -ForegroundColor Green
-Write-Host "     Pass 1: Random - original data destroyed" -ForegroundColor Green
-Write-Host "     Pass 2: Zero - disk cleaned" -ForegroundColor Green
+Write-Host "     Pass 1: WIPE (0xFF) - all data erased" -ForegroundColor Green
+Write-Host "     Pass 2: ZERO (0x00) - disk cleaned" -ForegroundColor Green
 Write-Host "     Professional recovery: NOT POSSIBLE" -ForegroundColor Green
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host ""
