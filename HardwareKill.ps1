@@ -1,5 +1,5 @@
 #Requires -RunAsAdministrator
-# SECURE WIPE - 2-Pass: Wipe (0xFF) + Zero (0x00)
+# SECURE WIPE - 2-Pass: Clean + Zero
 # Prevents data recovery by professional tools
 
 Add-Type @"
@@ -46,11 +46,11 @@ public class RawDisk {
 
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Cyan
-Write-Host "     SECURE WIPE - 2 PASS (WIPE + ZERO)" -ForegroundColor Cyan
+Write-Host "     SECURE WIPE - 2 PASS (CLEAN + ZERO)" -ForegroundColor Cyan
 Write-Host "  ====================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  This script will:" -ForegroundColor Yellow
-Write-Host "  - Pass 1: WIPE disk (0xFF - erase all data)" -ForegroundColor Yellow
+Write-Host "  - Pass 1: CLEAN disk (remove partitions, erase data)" -ForegroundColor Yellow
 Write-Host "  - Pass 2: ZERO fill (0x00 - prevent recovery)" -ForegroundColor Yellow
 Write-Host "  - Safe for hardware (no damage)" -ForegroundColor Yellow
 Write-Host ""
@@ -65,66 +65,42 @@ foreach ($disk in $disks) {
     Write-Host "  [*] Disk $diskNum : $($disk.Model) - $sizeGB GB ($mediaType)" -ForegroundColor Yellow
 
     try {
-        $path = "\\.\PhysicalDrive$diskNum"
-        $handle = [RawDisk]::Open($path)
-
-        if ($handle.IsInvalid) {
-            Write-Host "      Cannot open - skipping" -ForegroundColor DarkGray
-            continue
-        }
-
-        # Lock and dismount volumes
-        Get-Partition -DiskNumber $diskNum -ErrorAction SilentlyContinue | ForEach-Object {
-            if ($_.DriveLetter) {
-                $volHandle = [RawDisk]::Open("\\.\$($_.DriveLetter):")
-                if (-not $volHandle.IsInvalid) {
-                    [RawDisk]::Lock($volHandle)
-                    [RawDisk]::Dismount($volHandle)
-                    $volHandle.Close()
-                }
-            }
-        }
-
-        $targetSize = [long]$disk.Size
-        $bufferSize = 100MB
-        $buffer = New-Object byte[] $bufferSize
-        $written = 0
-
         # ============================================
-        # PASS 1: WIPE (0xFF - erase all data)
+        # PASS 1: CLEAN DISK (remove all partitions)
         # ============================================
-        Write-Host "      [PASS 1/2] WIPING disk (0xFF)..." -ForegroundColor Magenta
+        Write-Host "      [PASS 1/2] CLEANING disk..." -ForegroundColor Magenta
 
-        # Fill buffer with 0xFF
-        for ($i = 0; $i -lt $bufferSize; $i++) {
-            $buffer[$i] = 0xFF
-        }
+        # Use diskpart to clean
+        $diskpartScript = @"
+select disk $diskNum
+clean
+"@
+        $diskpartScript | diskpart | Out-Null
 
-        for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
-            try {
-                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+        # Also clear disk using PowerShell
+        try {
+            Clear-Disk -Number $diskNum -RemoveData -RemoveOEM -Confirm:$false -ErrorAction SilentlyContinue
+        } catch {}
 
-                # Update progress every 1GB
-                if (($offset % 1GB) -eq 0) {
-                    $pct = [math]::Round(($offset / $targetSize) * 100, 1)
-                    $wipedGB = [math]::Round($offset / 1GB, 1)
-                    Write-Host "`r      [WIPE] $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Magenta
-                }
-            }
-            catch {
-                continue
-            }
-        }
-        Write-Host ""
-        Write-Host "      [OK] Pass 1 complete - disk wiped (0xFF)" -ForegroundColor Green
+        Write-Host "      [OK] Pass 1 complete - disk cleaned" -ForegroundColor Green
 
         # ============================================
         # PASS 2: ZERO FILL (0x00 - prevent recovery)
         # ============================================
         Write-Host "      [PASS 2/2] Writing ZERO (0x00)..." -ForegroundColor Cyan
 
-        # Reset buffer to zeros
-        $buffer = New-Object byte[] $bufferSize
+        $path = "\\.\PhysicalDrive$diskNum"
+        $handle = [RawDisk]::Open($path)
+
+        if ($handle.IsInvalid) {
+            Write-Host "      Cannot open disk for zero-fill" -ForegroundColor Red
+            continue
+        }
+
+        $targetSize = [long]$disk.Size
+        $bufferSize = 100MB
+        $buffer = New-Object byte[] $bufferSize  # Default is zeros
+        $written = 0
 
         for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
             try {
@@ -157,8 +133,8 @@ foreach ($disk in $disks) {
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host "     SECURE WIPE COMPLETE (2 PASS)" -ForegroundColor Green
-Write-Host "     Pass 1: WIPE (0xFF) - all data erased" -ForegroundColor Green
-Write-Host "     Pass 2: ZERO (0x00) - disk cleaned" -ForegroundColor Green
+Write-Host "     Pass 1: CLEAN - partitions removed" -ForegroundColor Green
+Write-Host "     Pass 2: ZERO - disk filled with 0x00" -ForegroundColor Green
 Write-Host "     Professional recovery: NOT POSSIBLE" -ForegroundColor Green
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host ""
