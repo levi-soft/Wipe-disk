@@ -34,6 +34,7 @@ echo   - Pass 1: CLEAN disk (remove partitions, erase data)
 echo   - Pass 2: ZERO fill (0x00 - prevent recovery)
 echo   - Safe for hardware (no damage)
 echo   - Professional recovery tools CANNOT recover
+echo   - System disk processed LAST (Windows stays alive)
 echo.
 echo WARNING:
 echo   - ALL DATA WILL BE PERMANENTLY ERASED
