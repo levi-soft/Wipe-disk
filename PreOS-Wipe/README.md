@@ -1,67 +1,80 @@
 # PreOS Emergency Wipe
 
-Công cụ xóa ổ cứng khẩn cấp kiểu PreOS - **Khởi động lại, chạy từ RAM, xóa TẤT CẢ ổ cứng**
+Công cụ xóa ổ cứng khẩn cấp - **Khởi động lại, chạy TRƯỚC LOGIN, xóa TẤT CẢ ổ cứng**
 
 ## Cách hoạt động
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Chạy tool → Thiết lập cấu hình Safe Mode                │
+│  1. Chạy tool → Tạo Scheduled Task (SYSTEM, At Startup)     │
 │  2. Máy tính tự động khởi động lại                          │
-│  3. Boot vào Safe Mode (chạy từ RAM tối thiểu)              │
-│  4. Script tự động chạy và xóa TẤT CẢ ổ đĩa                │
-│  5. Sử dụng DISKPART CLEAN ALL - xóa hoàn toàn              │
+│  3. Windows boot → Task chạy TRƯỚC KHI LOGIN               │
+│  4. DISKPART CLEAN xóa MBR/GPT (máy mất boot ngay)         │
+│  5. DISKPART CLEAN ALL xóa toàn bộ dữ liệu                 │
 │  6. Máy tắt sau khi hoàn tất                                │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**Tại sao hoạt động?**
+- Scheduled Task với SYSTEM account chạy trước khi user login
+- DISKPART CLEAN xóa MBR/GPT ngay lập tức → máy không thể boot lại
+- DISKPART CLEAN ALL ghi đè zeros lên toàn bộ ổ đĩa
 
 ## Các file
 
 | File | Mô tả |
 |------|-------|
-| `InstantWipe.bat` | **XÓA NGAY** - Một click khởi động lại và xóa tất cả |
-| `PreOS-WipeNow.bat` | Launcher với tùy chọn thiết lập/hủy |
-| `PreOSWipe.ps1` | Script PowerShell chính với tùy chọn nâng cao |
+| `InstantWipe.bat` | **XÓA NGAY** - Một click, reboot và xóa tất cả |
+| `PreOS-WipeNow.bat` | Launcher với menu |
+| `PreOSWipe.ps1` | Script PowerShell với tùy chọn nâng cao |
 | `CancelWipe.bat` | Hủy thiết lập (nếu chưa reboot) |
 
 ## Sử dụng
 
-### Cách 1: Xóa nhanh nhất (InstantWipe)
+### Cách 1: Xóa nhanh (InstantWipe)
 
 ```
-1. Double-click InstantWipe.bat
+1. Double-click InstantWipe.bat (Run as Admin)
 2. Xác nhận 3 lần
-3. Máy tự động khởi động lại và xóa tất cả
+3. Máy reboot → Wipe tự động chạy trước login
 ```
 
-### Cách 2: PowerShell với tùy chọn
+### Cách 2: PowerShell
 
 ```powershell
-# Thiết lập và khởi động lại để xóa
+# Thiết lập và reboot để xóa (đợi 10s mặc định)
 .\PreOSWipe.ps1 -SetupWipe
 
-# Xóa với 3 lần ghi đè (an toàn hơn)
-.\PreOSWipe.ps1 -SetupWipe -Passes 3
+# Đợi 30 giây trước khi xóa (có thời gian tắt máy)
+.\PreOSWipe.ps1 -SetupWipe -DelaySeconds 30
 
-# Hủy thiết lập (nếu chưa reboot)
+# Xem danh sách ổ đĩa
+.\PreOSWipe.ps1 -ListDisks
+
+# Hủy thiết lập
 .\PreOSWipe.ps1 -CancelWipe
 ```
 
 ### Cách 3: Hủy nếu đổi ý
 
+**Trước khi reboot:**
 ```
-- Nếu CHƯA reboot: Chạy CancelWipe.bat
-- Nếu ĐÃ reboot: TẮT MÁY trong 15 giây đầu
+- Chạy CancelWipe.bat
+- Hoặc: shutdown /a
+```
+
+**Sau khi reboot:**
+```
+- TẮT MÁY trong 10 giây đầu (trước khi wipe bắt đầu)
+- Boot từ USB → Xóa Scheduled Task
 ```
 
 ## Quy trình xác nhận
 
 Tool yêu cầu xác nhận 3 lần:
-1. Nhập `XOA TAT CA`
-2. Nhập `KHONG KHOI PHUC`
-3. Nhập `TOI HIEU VA DONG Y`
-
-Sau đó có 15 giây để tắt máy trước khi bắt đầu xóa.
+1. Nhập `XOA`
+2. Nhập `KHAN CAP`
+3. Nhập `TOI DONG Y XOA TAT CA`
 
 ## Cảnh báo
 
@@ -70,11 +83,10 @@ Sau đó có 15 giây để tắt máy trước khi bắt đầu xóa.
 ║                    !!! CẢNH BÁO TỐI QUAN TRỌNG !!!               ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║                                                                  ║
-║  • Tool này XÓA TẤT CẢ ổ cứng, bao gồm cả ổ Windows (C:)       ║
-║  • Sau khi reboot, quá trình xóa TỰ ĐỘNG và KHÔNG THỂ DỪNG     ║
-║  • Dữ liệu KHÔNG THỂ KHÔI PHỤC bằng bất kỳ phương pháp nào     ║
-║  • Máy tính sẽ không thể boot sau khi xóa                       ║
-║  • Cần cài lại Windows hoàn toàn                                 ║
+║  • Tool này XÓA TẤT CẢ ổ cứng, bao gồm cả ổ Windows (C:)        ║
+║  • MBR/GPT bị xóa ngay → Máy KHÔNG THỂ BOOT lại                 ║
+║  • Dữ liệu KHÔNG THỂ KHÔI PHỤC bằng bất kỳ phương pháp nào      ║
+║  • Cần cài lại Windows hoàn toàn từ USB                         ║
 ║                                                                  ║
 ║  CHỈ SỬ DỤNG KHI THỰC SỰ CẦN XÓA KHẨN CẤP!                      ║
 ║                                                                  ║
@@ -85,17 +97,17 @@ Sau đó có 15 giây để tắt máy trước khi bắt đầu xóa.
 
 - Windows 10/11
 - Quyền Administrator
-- KHÔNG cần USB boot hay công cụ bên ngoài
+- KHÔNG cần USB boot
 
-## So sánh với tool thường
+## So sánh
 
 | Tính năng | EmergencyWipe (thường) | PreOS Wipe |
 |-----------|------------------------|------------|
 | Xóa ổ dữ liệu (D:, E:...) | ✅ | ✅ |
 | Xóa ổ hệ thống (C:) | ❌ | ✅ |
 | Cần USB boot | Không | Không |
-| Chạy từ RAM | Không | Có |
-| Xóa khi Windows đang chạy | Có | Không (reboot) |
+| Chạy trước login | Không | ✅ |
+| Xóa MBR/GPT | Không | ✅ |
 
 ## License
 

@@ -101,12 +101,13 @@ Wipe-disk/
 ```
 1. Chạy PreOS-Wipe/InstantWipe.bat
 2. Xác nhận 3 lần
-3. Máy tự động khởi động lại vào Safe Mode
-4. Script chạy từ RAM và xóa TẤT CẢ ổ cứng
-5. Máy tắt sau khi hoàn tất
+3. Máy tự động khởi động lại
+4. Scheduled Task (SYSTEM) chạy TRƯỚC KHI LOGIN
+5. DISKPART CLEAN ALL xóa TẤT CẢ ổ cứng
+6. Máy tắt sau khi hoàn tất
 ```
 
-**KHÔNG cần USB boot** - Tool tự động reboot vào môi trường Pre-OS.
+**KHÔNG cần USB boot** - Scheduled Task chạy với SYSTEM account trước login.
 
 Xem thêm: [PreOS-Wipe/README.md](PreOS-Wipe/README.md)
 

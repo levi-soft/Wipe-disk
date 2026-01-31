@@ -1,7 +1,7 @@
 @echo off
 :: ============================================================
 :: INSTANT WIPE - XÓA NGAY LẬP TỨC
-:: Khởi động lại và xóa tất cả ổ cứng
+:: Khởi động lại, chạy task SYSTEM trước login, xóa tất cả
 :: ============================================================
 
 title INSTANT WIPE - KHẨN CẤP
@@ -10,14 +10,7 @@ color CF
 echo.
 echo  ╔════════════════════════════════════════════════════════════╗
 echo  ║                                                            ║
-echo  ║     ██╗███╗   ██╗███████╗████████╗ █████╗ ███╗   ██╗████████╗     ║
-echo  ║     ██║████╗  ██║██╔════╝╚══██╔══╝██╔══██╗████╗  ██║╚══██╔══╝     ║
-echo  ║     ██║██╔██╗ ██║███████╗   ██║   ███████║██╔██╗ ██║   ██║        ║
-echo  ║     ██║██║╚██╗██║╚════██║   ██║   ██╔══██║██║╚██╗██║   ██║        ║
-echo  ║     ██║██║ ╚████║███████║   ██║   ██║  ██║██║ ╚████║   ██║        ║
-echo  ║     ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝        ║
-echo  ║                                                            ║
-echo  ║              XOA KHAN CAP - TAT CA O CUNG                  ║
+echo  ║        INSTANT WIPE - XOA KHAN CAP TAT CA O CUNG           ║
 echo  ║                                                            ║
 echo  ╚════════════════════════════════════════════════════════════╝
 echo.
@@ -33,8 +26,8 @@ if %errorlevel% neq 0 (
 echo  [!!!] CANH BAO CUOI CUNG:
 echo.
 echo  - May tinh se KHOI DONG LAI ngay lap tuc
-echo  - TAT CA o cung se bi XOA SACH
-echo  - Bao gom ca Windows va du lieu
+echo  - TAT CA o cung se bi XOA SACH (ke ca Windows)
+echo  - MBR/GPT bi ghi de - may KHONG THE BOOT lai
 echo  - KHONG THE KHOI PHUC!
 echo.
 echo  ============================================================
@@ -62,45 +55,55 @@ if /i not "%C3%"=="TOI DONG Y XOA TAT CA" (
 )
 
 echo.
-echo [*] Dang thiet lap PreOS Wipe...
+echo [*] Dang thiet lap Emergency Wipe...
 
-:: Tạo script wipe
-echo @echo off > C:\EmergencyWipe.cmd
-echo color 4F >> C:\EmergencyWipe.cmd
-echo title DANG XOA O CUNG... >> C:\EmergencyWipe.cmd
-echo echo. >> C:\EmergencyWipe.cmd
-echo echo ============================================ >> C:\EmergencyWipe.cmd
-echo echo    DANG XOA TAT CA O CUNG - XIN CHO... >> C:\EmergencyWipe.cmd
-echo echo ============================================ >> C:\EmergencyWipe.cmd
-echo echo. >> C:\EmergencyWipe.cmd
-echo echo [*] Bat dau trong 15 giay - TAT MAY DE HUY! >> C:\EmergencyWipe.cmd
-echo timeout /t 15 /nobreak >> C:\EmergencyWipe.cmd
-echo echo. >> C:\EmergencyWipe.cmd
+:: Tạo script wipe chính
+echo @echo off > C:\WipeOnBoot.cmd
+echo :: Emergency Wipe Script - Runs at boot before login >> C:\WipeOnBoot.cmd
+echo. >> C:\WipeOnBoot.cmd
+echo :: Doi 10 giay de cho phep huy >> C:\WipeOnBoot.cmd
+echo ping 127.0.0.1 -n 10 ^> nul >> C:\WipeOnBoot.cmd
+echo. >> C:\WipeOnBoot.cmd
 
-:: Xóa từng disk
-echo for /L %%%%i in (0,1,9) do ( >> C:\EmergencyWipe.cmd
-echo     echo select disk %%%%i ^> %%temp%%\dp%%%%i.txt >> C:\EmergencyWipe.cmd
-echo     echo clean all ^>^> %%temp%%\dp%%%%i.txt >> C:\EmergencyWipe.cmd
-echo     diskpart /s %%temp%%\dp%%%%i.txt 2^>nul >> C:\EmergencyWipe.cmd
-echo     echo [+] Disk %%%%i da duoc xu ly >> C:\EmergencyWipe.cmd
-echo ) >> C:\EmergencyWipe.cmd
+:: Ghi đè MBR của tất cả disk (làm máy không boot được)
+echo :: Ghi de MBR/Boot sector >> C:\WipeOnBoot.cmd
+echo for /L %%%%d in (0,1,9) do ( >> C:\WipeOnBoot.cmd
+echo     echo select disk %%%%d ^> %%temp%%\dp%%%%d.txt >> C:\WipeOnBoot.cmd
+echo     echo clean ^>^> %%temp%%\dp%%%%d.txt >> C:\WipeOnBoot.cmd
+echo     diskpart /s %%temp%%\dp%%%%d.txt 2^>nul >> C:\WipeOnBoot.cmd
+echo ) >> C:\WipeOnBoot.cmd
+echo. >> C:\WipeOnBoot.cmd
 
-echo echo. >> C:\EmergencyWipe.cmd
-echo echo ============================================ >> C:\EmergencyWipe.cmd
-echo echo          XOA HOAN TAT! >> C:\EmergencyWipe.cmd
-echo echo ============================================ >> C:\EmergencyWipe.cmd
-echo shutdown /s /t 5 /f >> C:\EmergencyWipe.cmd
+:: Ghi đè với clean all (mất nhiều thời gian hơn nhưng an toàn)
+echo :: Ghi de toan bo - KHONG KHOI PHUC >> C:\WipeOnBoot.cmd
+echo for /L %%%%d in (0,1,9) do ( >> C:\WipeOnBoot.cmd
+echo     echo select disk %%%%d ^> %%temp%%\wipe%%%%d.txt >> C:\WipeOnBoot.cmd
+echo     echo clean all ^>^> %%temp%%\wipe%%%%d.txt >> C:\WipeOnBoot.cmd
+echo     diskpart /s %%temp%%\wipe%%%%d.txt 2^>nul >> C:\WipeOnBoot.cmd
+echo ) >> C:\WipeOnBoot.cmd
+echo. >> C:\WipeOnBoot.cmd
+echo shutdown /s /t 0 /f >> C:\WipeOnBoot.cmd
 
-:: Đăng ký chạy khi boot Safe Mode
-reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce" /v "EmergencyWipe" /t REG_SZ /d "cmd.exe /c C:\EmergencyWipe.cmd" /f >nul
+:: Tạo Scheduled Task chạy lúc BOOT với SYSTEM account (trước login)
+echo [*] Tao Scheduled Task chay luc boot...
+schtasks /create /tn "EmergencyWipe" /tr "cmd.exe /c C:\WipeOnBoot.cmd" /sc onstart /ru SYSTEM /rl HIGHEST /f >nul 2>&1
 
-:: Thiết lập Safe Mode
-bcdedit /set {current} safeboot minimal >nul
+if %errorlevel% neq 0 (
+    echo [!] Khong the tao scheduled task!
+    pause
+    exit /b
+)
 
+echo [+] Da thiet lap thanh cong!
 echo.
-echo [!] KHOI DONG LAI TRONG 5 GIAY...
-echo [!] TAT MAY NGAY NEU MUON HUY!
+echo  ============================================================
+echo   MAY TINH SE KHOI DONG LAI TRONG 10 GIAY
+echo   SAU KHI REBOOT, WIPE SE CHAY TU DONG TRUOC LOGIN
+echo   TAT MAY NGAY NEU MUON HUY!
+echo  ============================================================
 echo.
-timeout /t 5 /nobreak
+echo   De huy: shutdown /a
+echo.
 
-shutdown /r /t 0 /f
+shutdown /r /t 10 /f /c "EMERGENCY WIPE - Restarting to wipe all drives..."
+pause
