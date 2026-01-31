@@ -95,73 +95,47 @@ foreach ($disk in $disks) {
             }
         }
 
-        # DoD 5220.22-M: 3 passes (0x00, 0xFF, Random)
+        # Write zeros to entire disk
         $targetSize = [long]$disk.Size
-        $patterns = @(
-            @{ Name = "Pass 1/3: Zeros (0x00)"; Value = 0x00 },
-            @{ Name = "Pass 2/3: Ones (0xFF)"; Value = 0xFF },
-            @{ Name = "Pass 3/3: Random"; Value = -1 }
-        )
+        $buffer = New-Object byte[] (4MB)  # All zeros
+        $offset = 0L
+        $written_total = 0L
+        $failed_total = 0L
+        $startTime = Get-Date
 
-        $totalSuccess = 0L
-        $totalFailed = 0L
+        Write-Host "      Writing zeros..." -ForegroundColor Red
 
-        foreach ($pattern in $patterns) {
-            Write-Host "      $($pattern.Name)..." -ForegroundColor Red
+        while ($offset -lt $targetSize) {
+            $written = 0
+            $result = [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written)
 
-            $buffer = New-Object byte[] (4MB)
-            if ($pattern.Value -eq -1) {
-                $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
-                $rng.GetBytes($buffer)
-            } elseif ($pattern.Value -ne 0) {
-                for ($i = 0; $i -lt $buffer.Length; $i++) { $buffer[$i] = $pattern.Value }
+            if ($result -and $written -gt 0) {
+                $written_total += $written
+                $offset += $written
+            } else {
+                if ($failed_total -eq 0) {
+                    $err = [RawDisk]::GetLastError()
+                    Write-Host "`n      [!] Write failed! Error: $err" -ForegroundColor Red
+                }
+                $failed_total += 4MB
+                $offset += 4MB
             }
 
-            $offset = 0L
-            $passSuccess = 0L
-            $passFailed = 0L
-            $startTime = Get-Date
-
-            while ($offset -lt $targetSize) {
-                $written = 0
-
-                if ($pattern.Value -eq -1) { $rng.GetBytes($buffer) }
-
-                $result = [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written)
-                $lastErr = [RawDisk]::GetLastError()
-
-                if ($result -and $written -gt 0) {
-                    $passSuccess += $written
-                    $offset += $written
-                } else {
-                    $passFailed += 4MB
-                    $offset += 4MB
-                    # First failure - show error code
-                    if ($passFailed -eq 4MB) {
-                        Write-Host ""
-                        Write-Host "      [!] Write failed! Error code: $lastErr" -ForegroundColor Red
-                    }
-                }
-
-                $pct = [int](($offset / $targetSize) * 100)
-                $elapsed = ((Get-Date) - $startTime).TotalSeconds
-                if ($elapsed -gt 0 -and $pct % 5 -eq 0) {
-                    $speed = [math]::Round($passSuccess / $elapsed / 1MB, 1)
-                    Write-Host ("`r      $($pattern.Name)... {0}% | Written: {1} GB | Failed: {2} GB | {3} MB/s" -f $pct, [math]::Round($passSuccess/1GB,1), [math]::Round($passFailed/1GB,1), $speed) -NoNewline -ForegroundColor Yellow
-                }
+            $pct = [int](($offset / $targetSize) * 100)
+            $elapsed = ((Get-Date) - $startTime).TotalSeconds
+            if ($elapsed -gt 0) {
+                $speed = [math]::Round($written_total / $elapsed / 1MB, 1)
+                Write-Host ("`r      Wiping zeros... {0}% | {1} MB/s" -f $pct, $speed) -NoNewline -ForegroundColor Yellow
             }
-            Write-Host ""
-            $totalSuccess += $passSuccess
-            $totalFailed += $passFailed
         }
 
         $handle.Close()
+        Write-Host ""
 
-        if ($totalFailed -gt 0) {
-            Write-Host "      [!] WARNING: $([math]::Round($totalFailed/1GB,1)) GB FAILED to write!" -ForegroundColor Red
-            Write-Host "      [!] Windows is blocking writes. Need to boot Recovery!" -ForegroundColor Red
+        if ($failed_total -gt 0) {
+            Write-Host "      [!] FAILED: $([math]::Round($failed_total/1GB,1)) GB blocked by Windows!" -ForegroundColor Red
         } else {
-            Write-Host "      SUCCESS! Wrote $([math]::Round($totalSuccess/1GB,1)) GB" -ForegroundColor Green
+            Write-Host "      SUCCESS! $([math]::Round($written_total/1GB,1)) GB wiped with zeros" -ForegroundColor Green
         }
     }
     catch {
