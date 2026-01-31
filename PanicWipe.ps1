@@ -44,6 +44,17 @@ public class RawDisk {
         Seek(h, offset);
         return WriteFile(h, data, (uint)data.Length, out written, IntPtr.Zero);
     }
+
+    [DllImport("kernel32.dll", SetLastError=true)]
+    public static extern bool ReadFile(SafeFileHandle h, byte[] b, uint n, out uint r, IntPtr o);
+
+    public static bool ReadAt(SafeFileHandle h, long offset, byte[] data, out uint read) {
+        Seek(h, offset);
+        return ReadFile(h, data, (uint)data.Length, out read, IntPtr.Zero);
+    }
+
+    [DllImport("kernel32.dll")]
+    public static extern int GetLastError();
 }
 "@
 
@@ -92,51 +103,66 @@ foreach ($disk in $disks) {
             @{ Name = "Pass 3/3: Random"; Value = -1 }
         )
 
+        $totalSuccess = 0L
+        $totalFailed = 0L
+
         foreach ($pattern in $patterns) {
             Write-Host "      $($pattern.Name)..." -ForegroundColor Red
 
             $buffer = New-Object byte[] (4MB)
             if ($pattern.Value -eq -1) {
-                # Random
                 $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
                 $rng.GetBytes($buffer)
             } elseif ($pattern.Value -ne 0) {
-                # Fill with value
                 for ($i = 0; $i -lt $buffer.Length; $i++) { $buffer[$i] = $pattern.Value }
             }
-            # else: buffer is already zeros
 
             $offset = 0L
+            $passSuccess = 0L
+            $passFailed = 0L
             $startTime = Get-Date
 
             while ($offset -lt $targetSize) {
                 $written = 0
 
-                # Regenerate random for each write
-                if ($pattern.Value -eq -1) {
-                    $rng.GetBytes($buffer)
-                }
+                if ($pattern.Value -eq -1) { $rng.GetBytes($buffer) }
 
-                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+                $result = [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written)
+                $lastErr = [RawDisk]::GetLastError()
 
-                if ($written -gt 0) {
+                if ($result -and $written -gt 0) {
+                    $passSuccess += $written
                     $offset += $written
                 } else {
+                    $passFailed += 4MB
                     $offset += 4MB
+                    # First failure - show error code
+                    if ($passFailed -eq 4MB) {
+                        Write-Host ""
+                        Write-Host "      [!] Write failed! Error code: $lastErr" -ForegroundColor Red
+                    }
                 }
 
                 $pct = [int](($offset / $targetSize) * 100)
                 $elapsed = ((Get-Date) - $startTime).TotalSeconds
-                if ($elapsed -gt 0) {
-                    $speed = [math]::Round($offset / $elapsed / 1MB, 1)
-                    Write-Host ("`r      $($pattern.Name)... {0}% | {1} MB/s" -f $pct, $speed) -NoNewline -ForegroundColor Yellow
+                if ($elapsed -gt 0 -and $pct % 5 -eq 0) {
+                    $speed = [math]::Round($passSuccess / $elapsed / 1MB, 1)
+                    Write-Host ("`r      $($pattern.Name)... {0}% | Written: {1} GB | Failed: {2} GB | {3} MB/s" -f $pct, [math]::Round($passSuccess/1GB,1), [math]::Round($passFailed/1GB,1), $speed) -NoNewline -ForegroundColor Yellow
                 }
             }
             Write-Host ""
+            $totalSuccess += $passSuccess
+            $totalFailed += $passFailed
         }
 
         $handle.Close()
-        Write-Host "      WIPED with 3 passes!" -ForegroundColor Green
+
+        if ($totalFailed -gt 0) {
+            Write-Host "      [!] WARNING: $([math]::Round($totalFailed/1GB,1)) GB FAILED to write!" -ForegroundColor Red
+            Write-Host "      [!] Windows is blocking writes. Need to boot Recovery!" -ForegroundColor Red
+        } else {
+            Write-Host "      SUCCESS! Wrote $([math]::Round($totalSuccess/1GB,1)) GB" -ForegroundColor Green
+        }
     }
     catch {
         Write-Host "      Error: $($_.Exception.Message)" -ForegroundColor DarkGray
