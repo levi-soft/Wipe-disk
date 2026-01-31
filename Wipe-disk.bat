@@ -92,7 +92,7 @@ echo [INFO] Method: Zero Fill (1 pass)
 echo [INFO] This may take a long time depending on disk size...
 echo.
 
-"%AOMEI_EXE%" /hd:0 /wipedisk /method:1 /out:"%LOG_DIR%\AOMEI_Wipe_Detail.log"
+"%AOMEI_EXE%" /wipe /hd:0 /fill:0
 
 set WIPE_RESULT=%errorLevel%
 
