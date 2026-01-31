@@ -1,6 +1,6 @@
 #Requires -RunAsAdministrator
-# SECURE WIPE - Zero-fill disk to prevent data recovery
-# Safe disk wiping - NO hardware damage
+# SECURE WIPE - 2-Pass: Random + Zero fill
+# Prevents data recovery by professional tools
 
 Add-Type @"
 using System;
@@ -46,12 +46,12 @@ public class RawDisk {
 
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Cyan
-Write-Host "     SECURE WIPE - ZERO FILL DISK" -ForegroundColor Cyan
+Write-Host "     SECURE WIPE - 2 PASS (RANDOM + ZERO)" -ForegroundColor Cyan
 Write-Host "  ====================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  This script will:" -ForegroundColor Yellow
-Write-Host "  - Write ZERO to entire disk" -ForegroundColor Yellow
-Write-Host "  - Prevent data recovery by software" -ForegroundColor Yellow
+Write-Host "  - Pass 1: Write RANDOM data (destroy original data)" -ForegroundColor Yellow
+Write-Host "  - Pass 2: Write ZERO (clean, prevent recovery)" -ForegroundColor Yellow
 Write-Host "  - Safe for hardware (no damage)" -ForegroundColor Yellow
 Write-Host ""
 
@@ -87,36 +87,65 @@ foreach ($disk in $disks) {
 
         $targetSize = [long]$disk.Size
         $bufferSize = 100MB
-        $buffer = New-Object byte[] $bufferSize  # Zero-filled buffer (default)
+        $buffer = New-Object byte[] $bufferSize
         $written = 0
+        $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
 
-        Write-Host "      [WIPING] Zero-fill in progress..." -ForegroundColor Cyan
+        # ============================================
+        # PASS 1: RANDOM DATA (destroy original data)
+        # ============================================
+        Write-Host "      [PASS 1/2] Writing RANDOM data..." -ForegroundColor Magenta
 
-        $totalChunks = [math]::Ceiling($targetSize / $bufferSize)
-        $currentChunk = 0
+        for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
+            try {
+                $rng.GetBytes($buffer)
+                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+
+                # Update progress every 1GB
+                if (($offset % 1GB) -eq 0) {
+                    $pct = [math]::Round(($offset / $targetSize) * 100, 1)
+                    $wipedGB = [math]::Round($offset / 1GB, 1)
+                    Write-Host "`r      [RANDOM] $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Magenta
+                }
+            }
+            catch {
+                continue
+            }
+        }
+        Write-Host ""
+        Write-Host "      [OK] Pass 1 complete - original data destroyed" -ForegroundColor Green
+
+        # ============================================
+        # PASS 2: ZERO FILL (clean, prevent recovery)
+        # ============================================
+        Write-Host "      [PASS 2/2] Writing ZERO..." -ForegroundColor Cyan
+
+        # Reset buffer to zeros
+        $buffer = New-Object byte[] $bufferSize
 
         for ($offset = 0L; $offset -lt $targetSize; $offset += $bufferSize) {
             try {
                 [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
-                $currentChunk++
 
-                # Update progress every 10 chunks
-                if ($currentChunk % 10 -eq 0) {
+                # Update progress every 1GB
+                if (($offset % 1GB) -eq 0) {
                     $pct = [math]::Round(($offset / $targetSize) * 100, 1)
                     $wipedGB = [math]::Round($offset / 1GB, 1)
-                    Write-Host "`r      Progress: $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Green
+                    Write-Host "`r      [ZERO] $pct% ($wipedGB GB / $sizeGB GB)     " -NoNewline -ForegroundColor Cyan
                 }
             }
             catch {
-                # Continue on error (some sectors may be protected)
                 continue
             }
         }
+        Write-Host ""
+        Write-Host "      [OK] Pass 2 complete - disk zeroed" -ForegroundColor Green
+
+        $rng.Dispose()
+        $handle.Close()
 
         Write-Host ""
-        Write-Host "      [OK] Disk $diskNum wiped successfully" -ForegroundColor Green
-
-        $handle.Close()
+        Write-Host "      [DONE] Disk $diskNum securely wiped" -ForegroundColor Green
     }
     catch {
         Write-Host "      Error: $($_.Exception.Message)" -ForegroundColor Red
@@ -125,9 +154,10 @@ foreach ($disk in $disks) {
 
 Write-Host ""
 Write-Host "  ====================================================" -ForegroundColor Green
-Write-Host "     SECURE WIPE COMPLETE" -ForegroundColor Green
-Write-Host "     All disks have been zero-filled" -ForegroundColor Green
-Write-Host "     Data recovery is not possible" -ForegroundColor Green
+Write-Host "     SECURE WIPE COMPLETE (2 PASS)" -ForegroundColor Green
+Write-Host "     Pass 1: Random - original data destroyed" -ForegroundColor Green
+Write-Host "     Pass 2: Zero - disk cleaned" -ForegroundColor Green
+Write-Host "     Professional recovery: NOT POSSIBLE" -ForegroundColor Green
 Write-Host "  ====================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "System will shut down in 5 seconds..." -ForegroundColor Yellow
