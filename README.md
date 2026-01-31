@@ -2,6 +2,21 @@
 
 Công cụ xóa ổ cứng khẩn cấp cho Windows - **DỮ LIỆU KHÔNG THỂ KHÔI PHỤC**
 
+## Cấu trúc
+
+```
+Wipe-disk/
+├── EmergencyWipe.ps1      # Xóa ổ đĩa dữ liệu (D:, E:...)
+├── WipeNow.bat            # Launcher chính
+├── QuickWipe.bat          # Xóa nhanh
+│
+└── PreOS-Wipe/            # XÓA CẢ Ổ HỆ THỐNG (C:)
+    ├── InstantWipe.bat    # Một click - reboot và xóa tất cả
+    ├── PreOSWipe.ps1      # Script chính với tùy chọn
+    ├── PreOS-WipeNow.bat  # Launcher PreOS
+    └── CancelWipe.bat     # Hủy thiết lập
+```
+
 ## Tính năng
 
 - Nhiều phương pháp xóa bảo mật
@@ -79,14 +94,21 @@ Công cụ xóa ổ cứng khẩn cấp cho Windows - **DỮ LIỆU KHÔNG THỂ
 ╚══════════════════════════════════════════════════════════════════╝
 ```
 
-## Xóa ổ đĩa hệ thống
+## Xóa ổ đĩa hệ thống (PreOS Wipe)
 
-Để xóa ổ đĩa chứa Windows (thường là C:), bạn cần:
+Để xóa ổ đĩa chứa Windows (C:), sử dụng **PreOS-Wipe**:
 
-1. Tạo USB Boot Windows PE hoặc Linux Live USB
-2. Copy tool vào USB
-3. Boot từ USB
-4. Chạy tool từ USB để xóa ổ đĩa hệ thống
+```
+1. Chạy PreOS-Wipe/InstantWipe.bat
+2. Xác nhận 3 lần
+3. Máy tự động khởi động lại vào Safe Mode
+4. Script chạy từ RAM và xóa TẤT CẢ ổ cứng
+5. Máy tắt sau khi hoàn tất
+```
+
+**KHÔNG cần USB boot** - Tool tự động reboot vào môi trường Pre-OS.
+
+Xem thêm: [PreOS-Wipe/README.md](PreOS-Wipe/README.md)
 
 ## Mức độ bảo mật
 
