@@ -1,123 +1,96 @@
-# Emergency Drive Wipe Tool
+# Disk Wiper
 
-Công cụ xóa ổ cứng khẩn cấp cho Windows - **DỮ LIỆU KHÔNG THỂ KHÔI PHỤC**
+Professional emergency disk wipe tool for Windows using **raw disk access**.
 
-## Cấu trúc
+## How It Works
 
 ```
-Wipe-disk/
-├── EmergencyWipe.ps1      # Xóa ổ đĩa dữ liệu (D:, E:...)
-├── WipeNow.bat            # Launcher chính
-├── QuickWipe.bat          # Xóa nhanh
-│
-└── PreOS-Wipe/            # XÓA CẢ Ổ HỆ THỐNG (C:)
-    ├── InstantWipe.bat    # Một click - reboot và xóa tất cả
-    ├── PreOSWipe.ps1      # Script chính với tùy chọn
-    ├── PreOS-WipeNow.bat  # Launcher PreOS
-    └── CancelWipe.bat     # Hủy thiết lập
+┌─────────────────────────────────────────────────────────────────┐
+│  Opens \\.\PhysicalDriveX with GENERIC_WRITE                    │
+│  ↓                                                              │
+│  Writes directly to disk sectors (bypasses filesystem)         │
+│  ↓                                                              │
+│  Overwrites MBR/GPT, partition tables, all data                │
+│  ↓                                                              │
+│  Data is UNRECOVERABLE                                          │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Tính năng
+**No reboot required.** Writes directly to physical disk. If system disk is wiped, Windows crashes immediately but data is already destroyed.
 
-- Nhiều phương pháp xóa bảo mật
-- Xác nhận 3 lần trước khi xóa
-- Hiển thị tiến trình
-- Bảo vệ ổ đĩa hệ thống
-- Hỗ trợ dòng lệnh và giao diện tương tác
+## Files
 
-## Phương pháp xóa
+| File | Description |
+|------|-------------|
+| `PanicWipe.bat` | **EMERGENCY** - One click wipe ALL disks, no confirmation |
+| `Wipe.bat` | Interactive wipe with disk selection |
+| `Wipe.ps1` | PowerShell interface with options |
+| `DiskWiper.psm1` | Core module with raw disk access |
 
-| Phương pháp | Mô tả | Độ an toàn | Thời gian |
-|-------------|-------|------------|-----------|
-| **Quick** | Xóa files + cipher + format | Trung bình | Nhanh |
-| **Zero** | Ghi đè toàn bộ bằng 0 | Cao | Trung bình |
-| **DoD** | DoD 5220.22-M (3 passes) | Rất cao | Chậm |
-| **Gutmann** | Gutmann 35 passes | Cực cao | Rất chậm |
-| **Random** | Ghi đè random (tùy chỉnh) | Tùy chỉnh | Tùy chỉnh |
+## Usage
 
-## Cách sử dụng
+### Emergency (No Confirmation)
 
-### Cách 1: Double-click file batch
+```
+Double-click PanicWipe.bat
+→ Immediately wipes ALL physical disks
+→ Shuts down when complete
+```
 
-1. **WipeNow.bat** - Chạy với giao diện tương tác đầy đủ
-2. **QuickWipe.bat** - Xóa nhanh (chế độ Quick)
-
-### Cách 2: Dòng lệnh PowerShell
+### Interactive
 
 ```powershell
-# Liệt kê ổ đĩa
-.\EmergencyWipe.ps1 -ListDrives
+# List disks
+.\Wipe.ps1 -List
 
-# Xóa ổ D: với phương pháp DoD (mặc định)
-.\EmergencyWipe.ps1 -DriveLetter D -Method DoD
+# Wipe disk 1 with zeros
+.\Wipe.ps1 -Disk 1 -Method Zero
 
-# Xóa nhanh ổ E:
-.\EmergencyWipe.ps1 -DriveLetter E -Method Quick
+# Wipe disk 1 with DoD standard (3 passes)
+.\Wipe.ps1 -Disk 1 -Method DoD
 
-# Xóa với Gutmann 35-pass (cực kỳ an toàn)
-.\EmergencyWipe.ps1 -DriveLetter D -Method Gutmann
-
-# Xóa với random 7 passes
-.\EmergencyWipe.ps1 -DriveLetter D -Method Random -Passes 7
-
-# Xóa không cần xác nhận (NGUY HIỂM!)
-.\EmergencyWipe.ps1 -DriveLetter D -Method DoD -Force
+# Wipe without confirmation (DANGEROUS)
+.\Wipe.ps1 -Disk 1 -Method Zero -Force
 ```
 
-### Tham số
+## Wipe Methods
 
-| Tham số | Mô tả | Mặc định |
-|---------|-------|----------|
-| `-DriveLetter` | Ký tự ổ đĩa cần xóa (VD: D, E, F) | Bắt buộc |
-| `-Method` | Phương pháp xóa (Quick/Zero/DoD/Gutmann/Random) | DoD |
-| `-Passes` | Số lần ghi đè (chỉ dùng với Random) | 3 |
-| `-Force` | Bỏ qua xác nhận (NGUY HIỂM!) | False |
-| `-ListDrives` | Liệt kê tất cả ổ đĩa | - |
+| Method | Passes | Description | Security |
+|--------|--------|-------------|----------|
+| `Zero` | 1 | Write zeros | Standard |
+| `Random` | N | Random data | High |
+| `DoD` | 3 | DoD 5220.22-M (0x00, 0xFF, random) | Military |
+| `Gutmann` | 35 | Gutmann algorithm | Maximum |
 
-## Yêu cầu hệ thống
+## Technical Details
+
+- Uses Windows API `CreateFile` with `\\.\PhysicalDriveX`
+- Flags: `FILE_FLAG_NO_BUFFERING | FILE_FLAG_WRITE_THROUGH`
+- Writes directly to disk sectors, bypassing filesystem cache
+- Can wipe system disk while Windows is running (will cause BSOD)
+- Buffer size: 1-4 MB for optimal performance
+
+## Requirements
 
 - Windows 10/11
-- Quyền Administrator
-- PowerShell 5.0+
+- Administrator privileges
+- PowerShell 5.1+
 
-## Cảnh báo
-
-```
-╔══════════════════════════════════════════════════════════════════╗
-║  !!! CẢNH BÁO QUAN TRỌNG !!!                                     ║
-║                                                                  ║
-║  - Dữ liệu sau khi xóa KHÔNG THỂ KHÔI PHỤC bằng bất kỳ cách nào  ║
-║  - Kiểm tra kỹ ổ đĩa trước khi xóa                               ║
-║  - Backup dữ liệu quan trọng trước khi sử dụng                   ║
-║  - Không thể xóa ổ đĩa hệ thống khi Windows đang chạy           ║
-║  - Sử dụng đúng mục đích, tác giả không chịu trách nhiệm         ║
-╚══════════════════════════════════════════════════════════════════╝
-```
-
-## Xóa ổ đĩa hệ thống (PreOS Wipe)
-
-Để xóa ổ đĩa chứa Windows (C:), sử dụng **PreOS-Wipe**:
+## Warning
 
 ```
-1. Chạy PreOS-Wipe/InstantWipe.bat
-2. Xác nhận 3 lần
-3. Máy tự động khởi động lại
-4. Scheduled Task (SYSTEM) chạy TRƯỚC KHI LOGIN
-5. DISKPART CLEAN ALL xóa TẤT CẢ ổ cứng
-6. Máy tắt sau khi hoàn tất
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║   DATA IS PERMANENTLY DESTROYED AND CANNOT BE RECOVERED           ║
+║                                                                   ║
+║   • Wiping system disk will crash Windows immediately             ║
+║   • No confirmation in PanicWipe mode                             ║
+║   • Affects ALL connected physical disks in Panic mode            ║
+║   • USE ONLY IN GENUINE EMERGENCIES                               ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
 ```
 
-**KHÔNG cần USB boot** - Scheduled Task chạy với SYSTEM account trước login.
+## License
 
-Xem thêm: [PreOS-Wipe/README.md](PreOS-Wipe/README.md)
-
-## Mức độ bảo mật
-
-- **Quick**: Đủ cho hầu hết trường hợp thông thường
-- **Zero**: Đủ cho dữ liệu cá nhân
-- **DoD 5220.22-M**: Tiêu chuẩn quân đội Mỹ, đủ cho dữ liệu nhạy cảm
-- **Gutmann**: Tiêu chuẩn cao nhất, dành cho dữ liệu tuyệt mật
-
-## Giấy phép
-
-MIT License - Sử dụng miễn phí, tự chịu trách nhiệm.
+MIT License - Use at your own risk.
