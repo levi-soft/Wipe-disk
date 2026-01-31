@@ -1,56 +1,69 @@
 # Disk Wiper
 
-Professional emergency disk wipe tool for Windows using **raw disk access**.
+Professional emergency disk wipe tool for Windows.
 
-## How It Works
+## Two Methods
+
+### Method 1: Raw Disk Access (Instant)
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Opens \\.\PhysicalDriveX with GENERIC_WRITE                    │
-│  ↓                                                              │
-│  Writes directly to disk sectors (bypasses filesystem)         │
-│  ↓                                                              │
-│  Overwrites MBR/GPT, partition tables, all data                │
-│  ↓                                                              │
-│  Data is UNRECOVERABLE                                          │
-└─────────────────────────────────────────────────────────────────┘
+Opens \\.\PhysicalDriveX → Direct sector write → Immediate destruction
 ```
+- No reboot required
+- Windows crashes if system disk is wiped (but data already destroyed)
 
-**No reboot required.** Writes directly to physical disk. If system disk is wiped, Windows crashes immediately but data is already destroyed.
+### Method 2: Boot Wipe (Like AOMEI)
+
+```
+Setup → Reboot → Boot into PreOS → Wipe all disks → Shutdown
+```
+- Proper PreOS environment
+- Can cleanly wipe system disk
+- Uses diskpart clean all
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `PanicWipe.bat` | **EMERGENCY** - One click wipe ALL disks, no confirmation |
-| `Wipe.bat` | Interactive wipe with disk selection |
-| `Wipe.ps1` | PowerShell interface with options |
-| `DiskWiper.psm1` | Core module with raw disk access |
+```
+Wipe-disk/
+├── PanicWipe.bat           # INSTANT - Raw wipe all disks now
+├── Wipe.bat                # Interactive raw disk wipe
+├── Wipe.ps1                # PowerShell interface
+├── DiskWiper.psm1          # Core raw disk module
+│
+└── BootWipe/               # PreOS Boot Wipe (like AOMEI)
+    ├── PanicBoot.bat       # One-click reboot + wipe all
+    ├── BootWipe.bat        # Interactive setup
+    └── CreateBootWipe.ps1  # PowerShell setup
+```
 
 ## Usage
 
-### Emergency (No Confirmation)
+### PANIC MODE (No Confirmation)
 
-```
-Double-click PanicWipe.bat
-→ Immediately wipes ALL physical disks
-→ Shuts down when complete
-```
+| Action | Method |
+|--------|--------|
+| `PanicWipe.bat` | Raw wipe ALL disks instantly (Windows crashes) |
+| `BootWipe/PanicBoot.bat` | Reboot → Wipe all → Shutdown |
 
-### Interactive
+### Interactive Raw Wipe
 
 ```powershell
-# List disks
-.\Wipe.ps1 -List
+.\Wipe.ps1 -List                        # List disks
+.\Wipe.ps1 -Disk 1 -Method Zero         # Wipe disk 1
+.\Wipe.ps1 -Disk 1 -Method DoD -Force   # No confirmation
+```
 
-# Wipe disk 1 with zeros
-.\Wipe.ps1 -Disk 1 -Method Zero
+### Boot Wipe (PreOS)
 
-# Wipe disk 1 with DoD standard (3 passes)
-.\Wipe.ps1 -Disk 1 -Method DoD
+```powershell
+# Setup boot wipe
+.\BootWipe\CreateBootWipe.ps1 -Setup
 
-# Wipe without confirmation (DANGEROUS)
-.\Wipe.ps1 -Disk 1 -Method Zero -Force
+# Cancel before reboot
+.\BootWipe\CreateBootWipe.ps1 -Cancel
+
+# Create USB tool
+.\BootWipe\CreateBootWipe.ps1 -CreateUSB -USBDrive E
 ```
 
 ## Wipe Methods
