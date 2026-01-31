@@ -58,30 +58,22 @@ echo ================================================================
 echo   PLEASE VERIFY THAT DISK 0 IS THE CORRECT DISK TO WIPE!
 echo ================================================================
 echo.
-echo   If you are ABSOLUTELY CERTAIN you want to wipe Disk 0,
-echo   type exactly: WIPE DISK 0
-echo   (case sensitive)
+echo   Do you want to proceed with wiping Disk 0?
 echo.
 
-set /p CONFIRM="Enter confirmation: "
+choice /C YN /N /M "Press Y to WIPE Disk 0, N to Cancel: "
 
-if not "%CONFIRM%"=="WIPE DISK 0" (
+if errorlevel 2 (
     echo.
     echo [CANCELLED] Wipe operation cancelled.
-    echo [CANCELLED] User did not confirm. >> "%LOG_FILE%"
+    echo [CANCELLED] User cancelled operation. >> "%LOG_FILE%"
     echo.
     pause
     exit /b 0
 )
 
-:: Second confirmation
 echo.
-echo ================================================================
-echo   FINAL WARNING - LAST CHANCE TO CANCEL!
-echo ================================================================
-echo.
-echo   Press Ctrl+C to CANCEL now, or
-pause
+echo [CONFIRMED] Starting wipe operation...
 
 :: Log start
 echo. >> "%LOG_FILE%"
